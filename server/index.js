@@ -51,6 +51,12 @@ app.use(cors())
 app.use(express.json())
 app.use('/uploads', express.static(uploadsDir))
 
+// Serve dist folder in production
+const distPath = path.join(__dirname, '../dist')
+if (fs.existsSync(distPath)) {
+  app.use(express.static(distPath))
+}
+
 // Database file paths
 const productsDbPath = path.join(__dirname, '../db/products.json')
 const cartDbPath = path.join(__dirname, '../db/cart.json')
@@ -466,6 +472,13 @@ app.get('/api/orders', (req, res) => {
     res.status(500).json({ error: 'Failed to read orders' })
   }
 })
+
+// SPA fallback - serve index.html for all non-API routes
+if (fs.existsSync(distPath)) {
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(distPath, 'index.html'))
+  })
+}
 
 // Start server
 app.listen(PORT, () => {
