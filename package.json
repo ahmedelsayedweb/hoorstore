@@ -9,7 +9,6 @@
     "preview": "vite preview",
     "server": "node server/index.js",
     "dev:all": "concurrently \"npm run dev\" \"npm run server\"",
-    "preview:all": "concurrently \"npm run preview\" \"npm run server\"",
     "production": "npm run build && node server/index.js"
   },
   "dependencies": {
