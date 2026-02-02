@@ -1,11 +1,17 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useCart } from '../composables/useCart'
+import { useLanguage } from '../composables/useLanguage'
 import { productsApi } from '../api/products'
 
 const route = useRoute()
+const router = useRouter()
 const { addToCart } = useCart()
+const { t } = useLanguage()
+
+// Share notification
+const showShareNotification = ref(false)
 
 // Product data from API
 const product = ref(null)
@@ -110,30 +116,66 @@ const handleAddToCart = () => {
     quantity: quantity.value
   })
 }
+
+const handleBuyNow = () => {
+  addToCart({
+    id: product.value.id,
+    name: product.value.name,
+    price: product.value.salePrice,
+    image: product.value.images?.[0] || product.value.image,
+    color: selectedColor.value,
+    size: selectedSize.value,
+    height: selectedHeight.value,
+    quantity: quantity.value
+  })
+  router.push('/checkout')
+}
+
+const handleShare = async () => {
+  const shareData = {
+    title: product.value.name,
+    text: `${product.value.name} - ${t('common.egp')} ${product.value.salePrice || product.value.originalPrice}`,
+    url: window.location.href
+  }
+
+  try {
+    if (navigator.share) {
+      await navigator.share(shareData)
+    } else {
+      await navigator.clipboard.writeText(window.location.href)
+      showShareNotification.value = true
+      setTimeout(() => {
+        showShareNotification.value = false
+      }, 2000)
+    }
+  } catch (err) {
+    console.log('Share failed:', err)
+  }
+}
 </script>
 
 <template>
   <!-- Loading State -->
-  <div v-if="loading" class="max-w-7xl mx-auto px-4 md:px-8 py-8 text-center">
-    <p class="text-gray-500">Loading...</p>
+  <div v-if="loading" class="max-w-7xl mx-auto px-4 md:px-8 py-16 text-center">
+    <p class="text-gray-500">{{ t('common.loading') }}</p>
   </div>
 
   <!-- Error State -->
-  <div v-else-if="error" class="max-w-7xl mx-auto px-4 md:px-8 py-8 text-center">
-    <p class="text-red-500">{{ error }}</p>
+  <div v-else-if="error" class="max-w-7xl mx-auto px-4 md:px-8 py-16 text-center">
+    <p class="text-red-500">{{ t('product.failedToLoad') }}</p>
   </div>
 
   <!-- Product Content -->
   <div v-else-if="product" class="max-w-7xl mx-auto px-4 md:px-8 py-8">
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-16">
       <!-- Product Images -->
-      <div class="space-y-4">
+      <div class="space-y-4 lg:sticky lg:top-24 order-1 lg:order-2">
         <!-- Main Image -->
-        <div class="aspect-[3/4] bg-gray-100 overflow-hidden">
+        <div class="aspect-[3/4] bg-gray-50 overflow-hidden rounded-lg">
           <img
             :src="product.images?.[selectedImage] || product.image"
             :alt="product.name"
-            class="w-full h-full object-cover"
+            class="w-full h-full object-cover hover:scale-105 transition-transform duration-500"
           />
         </div>
         <!-- Thumbnail Gallery -->
@@ -142,8 +184,8 @@ const handleAddToCart = () => {
             v-for="(image, index) in product.images"
             :key="index"
             @click="selectedImage = index"
-            class="aspect-square bg-gray-100 overflow-hidden border-2 transition-colors"
-            :class="selectedImage === index ? 'border-gray-900' : 'border-transparent'"
+            class="aspect-square bg-gray-50 overflow-hidden rounded-lg border-2 transition-all duration-300 hover:opacity-80"
+            :class="selectedImage === index ? 'border-primary ring-2 ring-primary/20' : 'border-transparent'"
           >
             <img :src="image" :alt="`${product.name} ${index + 1}`" class="w-full h-full object-cover" />
           </button>
@@ -151,23 +193,23 @@ const handleAddToCart = () => {
       </div>
 
       <!-- Product Info -->
-      <div class="space-y-6">
+      <div class="space-y-6 order-2 lg:order-1">
         <!-- Brand & Title -->
         <div>
-          <p class="text-sm text-gray-500 mb-1">{{ product.brand }}</p>
-          <h1 class="text-3xl font-normal text-gray-900">{{ product.name }}</h1>
+          <span class="inline-block bg-primary text-white text-xs px-3 py-1 rounded mb-3">{{ product.brand }}</span>
+          <h1 class="text-2xl md:text-3xl font-semibold text-gray-900">{{ product.name }}</h1>
         </div>
 
         <!-- Price -->
-        <div class="flex items-center gap-3">
+        <div class="flex items-center gap-3 flex-wrap">
+          <span class="text-2xl font-semibold text-gray-900">{{ t('common.egp') }} {{ Number(product.salePrice || product.originalPrice || 0).toFixed(2) }}</span>
           <span v-if="product.isOnSale" class="text-lg text-gray-400 line-through">
-            LE {{ Number(product.originalPrice || 0).toFixed(2) }}
+            {{ t('common.egp') }} {{ Number(product.originalPrice || 0).toFixed(2) }}
           </span>
-          <span class="text-lg text-gray-900">LE {{ Number(product.salePrice || product.originalPrice || 0).toFixed(2) }}</span>
-          <span v-if="product.isOnSale" class="bg-gray-900 text-white text-xs px-2 py-1">Sale</span>
+          <span v-if="product.isOnSale" class="bg-red-500 text-white text-xs px-3 py-1 rounded-full">{{ t('product.sale') }}</span>
         </div>
 
-        <p class="text-sm text-gray-500">Taxes included. <a href="#" class="underline">Shipping</a> calculated at checkout.</p>
+        <!-- <p class="text-sm text-gray-500">Taxes included. <a href="#" class="underline">Shipping</a> calculated at checkout.</p> -->
 
         <!-- Sale Countdown Banner -->
         <!-- <div v-if="product.isOnSale" class="bg-amber-50 border border-amber-200 p-6 text-center">
@@ -201,21 +243,21 @@ const handleAddToCart = () => {
               <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
             </svg>
           </div>
-          <span class="text-sm text-gray-600">{{ product.reviewCount }} Reviews</span>
+          <span class="text-sm text-gray-600">{{ product.reviewCount }} {{ t('product.reviews') }}</span>
         </div>
 
         <!-- Color Options -->
         <div v-if="product.colors?.length">
-          <p class="text-sm text-gray-700 mb-3">color</p>
+          <p class="text-sm font-medium text-gray-900 mb-3">{{ t('product.color') }}</p>
           <div class="flex flex-wrap gap-2">
             <button
               v-for="color in product.colors"
               :key="color.name"
               @click="selectedColor = color.name"
-              class="px-4 py-2 text-sm border transition-colors"
+              class="px-4 py-2.5 text-sm font-medium border-2 rounded-lg transition-all duration-200"
               :class="selectedColor === color.name
                 ? 'bg-gray-900 text-white border-gray-900'
-                : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'"
+                : 'bg-white text-gray-700 border-gray-200 hover:border-gray-900'"
             >
               {{ color.name }}
             </button>
@@ -223,16 +265,16 @@ const handleAddToCart = () => {
         </div>
         <!-- Size Options -->
         <div v-if="product.sizes?.length">
-          <p class="text-sm text-gray-700 mb-3">Size</p>
+          <p class="text-sm font-medium text-gray-900 mb-3">{{ t('product.size') }}</p>
           <div class="flex flex-wrap gap-2">
             <button
               v-for="size in product.sizes"
               :key="size"
               @click="selectedSize = size"
-              class="px-4 py-2 text-sm border transition-colors"
+              class="min-w-[50px] px-4 py-2.5 text-sm font-medium border-2 rounded-lg transition-all duration-200"
               :class="selectedSize === size
                 ? 'bg-gray-900 text-white border-gray-900'
-                : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'"
+                : 'bg-white text-gray-700 border-gray-200 hover:border-gray-900'"
             >
               {{ size }}
             </button>
@@ -241,16 +283,16 @@ const handleAddToCart = () => {
 
         <!-- Height Options -->
         <div v-if="product.heights?.length">
-          <p class="text-sm text-gray-700 mb-3">height</p>
+          <p class="text-sm font-medium text-gray-900 mb-3">{{ t('product.height') }}</p>
           <div class="flex flex-wrap gap-2">
             <button
               v-for="height in product.heights"
               :key="height"
               @click="selectedHeight = height"
-              class="px-4 py-2 text-sm border transition-colors"
+              class="px-4 py-2.5 text-sm font-medium border-2 rounded-lg transition-all duration-200"
               :class="selectedHeight === height
                 ? 'bg-gray-900 text-white border-gray-900'
-                : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'"
+                : 'bg-white text-gray-700 border-gray-200 hover:border-gray-900'"
             >
               {{ height }}
             </button>
@@ -259,35 +301,35 @@ const handleAddToCart = () => {
 
         <!-- Quantity -->
         <div>
-          <p class="text-sm text-gray-700 mb-3">Quantity</p>
-          <div class="inline-flex items-center border border-gray-300">
-            <button
-              @click="decreaseQuantity"
-              class="px-4 py-3 text-gray-600 hover:bg-gray-50 transition-colors"
-            >
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4" />
-              </svg>
-            </button>
-            <span class="px-6 py-3 text-gray-900 min-w-[60px] text-center">{{ quantity }}</span>
+          <p class="text-sm font-medium text-gray-900 mb-3">{{ t('product.quantity') }}</p>
+          <div class="inline-flex items-center border-2 border-gray-200 rounded-lg overflow-hidden">
             <button
               @click="increaseQuantity"
-              class="px-4 py-3 text-gray-600 hover:bg-gray-50 transition-colors"
+              class="px-4 py-3 text-gray-600 hover:bg-gray-100 transition-colors"
             >
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+              </svg>
+            </button>
+            <span class="px-6 py-3 text-gray-900 font-medium min-w-[60px] text-center border-x-2 border-gray-200">{{ quantity }}</span>
+            <button
+              @click="decreaseQuantity"
+              class="px-4 py-3 text-gray-600 hover:bg-gray-100 transition-colors"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4" />
               </svg>
             </button>
           </div>
         </div>
 
         <!-- Action Buttons -->
-        <div class="space-y-3">
-          <button @click="handleAddToCart" class="w-full py-4 border border-gray-900 text-gray-900 text-sm hover:bg-gray-50 transition-colors">
-            Add to cart
+        <div class="space-y-3 pt-4">
+          <button @click="handleAddToCart" class="w-full py-4 border-2 border-gray-900 text-gray-900 font-semibold rounded-lg hover:bg-gray-900 hover:text-white transition-all duration-300">
+            {{ t('product.addToCart') }}
           </button>
-          <button class="w-full py-4 bg-gray-900 text-white text-sm hover:bg-gray-800 transition-colors">
-            Buy it now
+          <button @click="handleBuyNow" class="w-full py-4 bg-primary text-white font-semibold rounded-lg hover:bg-primary-dark transition-all duration-300">
+            {{ t('product.buyNow') }}
           </button>
         </div>
 
@@ -312,12 +354,20 @@ const handleAddToCart = () => {
         </div>
 
         <!-- Share Button -->
-        <button class="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 transition-colors">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-          </svg>
-          Share
-        </button>
+        <div class="relative">
+          <button @click="handleShare" class="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900 transition-colors">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+            </svg>
+            {{ t('product.share') }}
+          </button>
+          <!-- Copy notification -->
+          <transition name="fade">
+            <span v-if="showShareNotification" class="absolute top-full mt-2 start-0 bg-gray-900 text-white text-xs px-3 py-1.5 rounded-lg whitespace-nowrap">
+              {{ t('product.linkCopied') }}
+            </span>
+          </transition>
+        </div>
       </div>
     </div>
 
@@ -335,3 +385,15 @@ const handleAddToCart = () => {
     </section> -->
   </div>
 </template>
+
+<style scoped>
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+</style>

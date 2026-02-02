@@ -3,7 +3,7 @@
     "home": "Home",
     "children": "Children",
     "men": "Men",
-    "women": "Women",
+    "woman": "woman",
     "basicTops": "Basic Tops",
     "soireeWear": "Soiree Wear",
     "pants": "Pants",
@@ -25,6 +25,7 @@
   },
   "product": {
     "addToCart": "Add to Cart",
+    "buyNow": "Buy it now",
     "outOfStock": "Out of Stock",
     "color": "Color",
     "size": "Size",
@@ -33,7 +34,12 @@
     "description": "Description",
     "price": "Price",
     "salePrice": "Sale Price",
-    "brand": "Brand"
+    "brand": "Brand",
+    "sale": "Sale",
+    "share": "Share",
+    "reviews": "Reviews",
+    "failedToLoad": "Failed to load product",
+    "linkCopied": "Link copied!"
   },
   "cart": {
     "title": "Shopping Cart",
@@ -101,6 +107,9 @@
     "fillRequired": "Please fill in all required fields",
     "cartEmpty": "Cart is empty",
     "orderFailed": "Failed to submit order. Please try again.",
+    "notes": "Notes",
+    "notesPlaceholder": "Order notes (optional)",
+    "editItem": "Edit Item",
     "governorates": {
       "cairo": "Cairo",
       "giza": "Giza",
@@ -167,10 +176,36 @@
     "featuredProducts": "Featured Products",
     "saleProducts": "Sale Products",
     "newArrivals": "New Arrivals",
-    "shopNow": "Shop Now"
+    "shopNow": "Shop Now",
+    "shopAll": "Shop All"
+  },
+  "hero": {
+    "off": "OFF",
+    "limitedTimeSale": "LIMITED TIME SALE",
+    "shopNow": "SHOP NOW",
+    "shopAll": "SHOP ALL"
+  },
+  "collection": {
+    "all": "All",
+    "filter": "Filter",
+    "availability": "Availability",
+    "inStock": "In stock",
+    "outOfStock": "Out of stock",
+    "price": "Price",
+    "minPrice": "Min",
+    "maxPrice": "Max",
+    "sortBy": "Sort by",
+    "featured": "Featured",
+    "priceLowToHigh": "Price: Low to High",
+    "priceHighToLow": "Price: High to Low",
+    "newest": "Newest",
+    "products": "products",
+    "sale": "Sale",
+    "whiteFridaySale": "White Friday Sale Up to 50%",
+    "noProducts": "No products in this category"
   },
   "about": {
     "title": "About Hoor Store",
-    "description": "At Hoor Store, fashion meets fun for the whole family! Discover trendy outfits for kids, men, and women, crafted for comfort, style, and everyday confidence. Shop your favorites and enjoy a shopping experience made just for you!"
+    "description": "At Hoor Store, fashion meets fun for the whole family! Discover trendy outfits for kids, men, and woman, crafted for comfort, style, and everyday confidence. Shop your favorites and enjoy a shopping experience made just for you!"
   }
 }

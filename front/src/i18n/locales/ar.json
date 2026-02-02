@@ -3,7 +3,7 @@
     "home": "الرئيسية",
     "children": "الاطفال",
     "men": "رجالي",
-    "women": "حريمي",
+    "woman": "حريمي",
     "basicTops": "توبات أساسية",
     "soireeWear": "ملابس سهرة",
     "pants": "بناطيل",
@@ -25,6 +25,7 @@
   },
   "product": {
     "addToCart": "أضف للسلة",
+    "buyNow": "اشتري الآن",
     "outOfStock": "نفذت الكمية",
     "color": "اللون",
     "size": "المقاس",
@@ -33,7 +34,12 @@
     "description": "الوصف",
     "price": "السعر",
     "salePrice": "سعر العرض",
-    "brand": "الماركة"
+    "brand": "الماركة",
+    "sale": "تخفيض",
+    "share": "مشاركة",
+    "reviews": "تقييمات",
+    "failedToLoad": "فشل تحميل المنتج",
+    "linkCopied": "تم نسخ الرابط"
   },
   "cart": {
     "title": "سلة التسوق",
@@ -101,6 +107,9 @@
     "fillRequired": "يرجى ملء جميع الحقول المطلوبة",
     "cartEmpty": "السلة فارغة",
     "orderFailed": "فشل في إرسال الطلب. يرجى المحاولة مرة أخرى.",
+    "notes": "ملاحظات",
+    "notesPlaceholder": "ملاحظات على الطلب (اختياري)",
+    "editItem": "تعديل المنتج",
     "governorates": {
       "cairo": "القاهرة",
       "giza": "الجيزة",
@@ -167,7 +176,33 @@
     "featuredProducts": "منتجات مميزة",
     "saleProducts": "عروض خاصة",
     "newArrivals": "وصل حديثاً",
-    "shopNow": "تسوق الآن"
+    "shopNow": "تسوق الآن",
+    "shopAll": "تسوق الكل"
+  },
+  "hero": {
+    "off": "خصم",
+    "limitedTimeSale": "عرض لفترة محدودة",
+    "shopNow": "تسوق الآن",
+    "shopAll": "تسوق الكل"
+  },
+  "collection": {
+    "all": "الكل",
+    "filter": "تصفية",
+    "availability": "التوفر",
+    "inStock": "متوفر",
+    "outOfStock": "غير متوفر",
+    "price": "السعر",
+    "minPrice": "الحد الأدنى",
+    "maxPrice": "الحد الأقصى",
+    "sortBy": "ترتيب حسب",
+    "featured": "مميز",
+    "priceLowToHigh": "السعر: من الأقل للأعلى",
+    "priceHighToLow": "السعر: من الأعلى للأقل",
+    "newest": "الأحدث",
+    "products": "منتج",
+    "sale": "تخفيض",
+    "whiteFridaySale": "عروض الجمعة البيضاء خصم حتى 50%",
+    "noProducts": "لا توجد منتجات في هذا القسم"
   },
   "about": {
     "title": "عن متجر حور ستور",

@@ -1,12 +1,17 @@
 <script setup>
 import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import ProductCard from './ProductCard.vue'
 import { productsApi } from '@/api/products'
+import { useCart } from '@/composables/useCart'
+
+const { t } = useI18n()
+const { addToCart } = useCart()
 
 defineProps({
   title: {
     type: String,
-    default: 'Featured products'
+    default: ''
   }
 })
 
@@ -22,13 +27,26 @@ onMounted(async () => {
     loading.value = false
   }
 })
+
+const handleAddToCart = (productId) => {
+  const product = products.value.find(p => p.id === productId)
+  if (product) {
+    addToCart({
+      id: product.id,
+      name: product.name,
+      price: product.salePrice || product.price,
+      image: product.image,
+      quantity: 1
+    })
+  }
+}
 </script>
 
 <template>
   <section class="py-12 px-4 md:px-8 lg:px-16">
     <!-- Section Title with Underline -->
     <h2 class="text-2xl md:text-3xl font-normal text-gray-900 mb-10">
-      <span class="border-b-2 border-gray-900 pb-2">{{ title }}</span>
+      <span class="border-b-2 border-gray-900 pb-2">{{ t('home.featuredProducts') }}</span>
     </h2>
     <!-- Loading State -->
     <div v-if="loading" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
@@ -51,6 +69,7 @@ onMounted(async () => {
         :original-price="product.price"
         :sale-price="product.salePrice"
         :is-on-sale="product.isOnSale"
+        @add-to-cart="handleAddToCart"
       />
     </div>
   </section>

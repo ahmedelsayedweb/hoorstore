@@ -9,12 +9,12 @@ import FeaturedProductsSection from '../components/FeaturedProductsSection.vue'
     discount="50%"
     subtitle="LIMITED TIME SALE"
     buttonText="Shop all"
-    buttonLink="/sale"
+    buttonLink="/collections"
   />
   <SaleProductsSection
     v-if="false"
     title="White Friday Sale Up to 50%"
-    viewAllLink="/sale"
+    viewAllLink="/collections"
   />
   <FeaturedProductsSection title="Featured products" />
 </template>

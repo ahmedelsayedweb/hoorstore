@@ -70,6 +70,14 @@ export function useCart() {
     }
   }
 
+  const updateCartItem = async (cartId, updates) => {
+    const item = cartItems.value.find(item => item.id === cartId)
+    if (item) {
+      Object.assign(item, updates)
+      await cartApi.updateItem(cartId, updates)
+    }
+  }
+
   const clearCart = async () => {
     await cartApi.clearCart()
     cartItems.value = []
@@ -97,6 +105,7 @@ export function useCart() {
     addToCart,
     removeFromCart,
     updateQuantity,
+    updateCartItem,
     clearCart,
     openCart,
     closeCart,

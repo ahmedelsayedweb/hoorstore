@@ -8,11 +8,6 @@ const routes = [
     component: HomeView
   },
   {
-    path: '/products/:slug',
-    name: 'product',
-    component: () => import('../views/ProductView.vue')
-  },
-  {
     path: '/collections/:id',
     name: 'product-detail',
     component: () => import('../views/ProductView.vue')
@@ -28,33 +23,13 @@ const routes = [
     component: () => import('../views/CheckoutView.vue')
   },
   {
-    path: '/basic-tops',
-    name: 'basic-tops',
+    path: '/collections',
+    name: 'collections',
     component: () => import('../views/CollectionView.vue')
   },
   {
-    path: '/soiree-wear',
-    name: 'soiree-wear',
-    component: () => import('../views/CollectionView.vue')
-  },
-  {
-    path: '/pants',
-    name: 'pants',
-    component: () => import('../views/CollectionView.vue')
-  },
-  {
-    path: '/skirts',
-    name: 'skirts',
-    component: () => import('../views/CollectionView.vue')
-  },
-  {
-    path: '/isdal',
-    name: 'isdal',
-    component: () => import('../views/CollectionView.vue')
-  },
-  {
-    path: '/cardigans',
-    name: 'cardigans',
+    path: '/collection',
+    name: 'collection',
     component: () => import('../views/CollectionView.vue')
   },
   {

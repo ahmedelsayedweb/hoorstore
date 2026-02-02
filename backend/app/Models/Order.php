@@ -15,6 +15,7 @@ class Order extends Model
         'governorate',
         'phone',
         'phone2',
+        'notes',
         'shipping_method',
         'payment_method',
         'billing_address',

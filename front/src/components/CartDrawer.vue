@@ -113,7 +113,7 @@ const { cartItems, isCartOpen, closeCart, removeFromCart, updateQuantity, cartTo
           <span class="font-medium text-gray-900">{{ t('common.egp') }} {{ cartTotal.toFixed(2) }}</span>
         </div>
 
-        <p class="text-xs text-gray-500">{{ t('cart.taxesNote') }}</p>
+        <!-- <p class="text-xs text-gray-500">{{ t('cart.taxesNote') }}</p> -->
 
         <!-- Action Buttons -->
         <div class="space-y-2">

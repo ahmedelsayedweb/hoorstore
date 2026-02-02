@@ -1,16 +1,29 @@
 <script setup>
 import { ref, computed } from 'vue'
+import { useRoute } from 'vue-router'
 import { useCart } from '../composables/useCart'
 import { useLanguage } from '../composables/useLanguage'
 
+const route = useRoute()
 const { openCart, cartCount } = useCart()
 const { locale, currentLanguage, setLanguage, t } = useLanguage()
 
+const isActive = (link) => {
+  if (link === '/') {
+    return route.path === '/'
+  }
+  if (link.includes('?category=')) {
+    const category = link.split('?category=')[1]
+    return route.path === '/collection' && route.query.category === category
+  }
+  return route.path === link
+}
+
 const navItems = computed(() => [
-  { name: t('nav.home'), link: '/', active: true },
+  { name: t('nav.home'), link: '/' },
   { name: t('nav.children'), link: '/collection?category=children' },
   { name: t('nav.men'), link: '/collection?category=men' },
-  { name: t('nav.women'), link: '/collection?category=Woman' }
+  { name: t('nav.woman'), link: '/collection?category=woman' }
 ])
 
 const isCountryDropdownOpen = ref(false)
@@ -58,8 +71,8 @@ const changeLanguage = (lang) => {
           <li v-for="item in navItems" :key="item.name">
             <a
               :href="item.link"
-              class="text-gray-900 no-underline text-sm font-normal transition-colors duration-300 relative"
-              :class="{ 'after:content-[\'\'] after:absolute after:-bottom-1 after:left-0 after:w-full after:h-px after:bg-gray-900': item.active }"
+              class="nav-link"
+              :class="{ 'nav-link-active': isActive(item.link) }"
             >
               {{ item.name }}
             </a>
@@ -86,7 +99,7 @@ const changeLanguage = (lang) => {
         <!-- Icons -->
         <div class="flex items-center gap-4">
           <!-- Search -->
-          <button class="bg-transparent border-none cursor-pointer p-1 text-gray-900 hover:opacity-60 transition-opacity" aria-label="Search">
+          <button v-if="false" class="bg-transparent border-none cursor-pointer p-1 text-gray-900 hover:opacity-60 transition-opacity" aria-label="Search">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="11" cy="11" r="8"></circle>
               <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
@@ -94,7 +107,7 @@ const changeLanguage = (lang) => {
           </button>
 
           <!-- Account -->
-          <button class="bg-transparent border-none cursor-pointer p-1 text-gray-900 hover:opacity-60 transition-opacity" aria-label="Account">
+          <button v-if="false" class="bg-transparent border-none cursor-pointer p-1 text-gray-900 hover:opacity-60 transition-opacity" aria-label="Account">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
               <circle cx="12" cy="7" r="4"></circle>
@@ -109,10 +122,8 @@ const changeLanguage = (lang) => {
               <circle cx="18" cy="20" r="1"></circle>
               <path d="M6 6L4 2H1"></path>
             </svg>
-            <span
-              v-if="cartCount > 0"
-              class="absolute -top-1 -right-1 w-5 h-5 bg-gray-900 text-white text-xs rounded-full flex items-center justify-center"
-            >
+            <span v-if="cartCount > 0"
+              class="absolute -top-1 -right-1 w-5 h-5 bg-gray-900 text-white text-xs rounded-full flex items-center justify-center">
               {{ cartCount }}
             </span>
           </button>
@@ -121,3 +132,48 @@ const changeLanguage = (lang) => {
     </div>
   </header>
 </template>
+
+<style scoped>
+.nav-link {
+  position: relative;
+  color: #374151;
+  text-decoration: none;
+  font-family: "Cairo", system-ui, sans-serif;
+  font-size: 0.95rem;
+  font-weight: 500;
+  padding: 0.5rem 0;
+  transition: color 0.3s ease;
+  letter-spacing: 0.01em;
+}
+
+.nav-link::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  width: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #8b5cf6, #6366f1);
+  transition: all 0.3s ease;
+  transform: translateX(-50%);
+  border-radius: 2px;
+}
+
+.nav-link:hover {
+  color: #6366f1;
+}
+
+.nav-link:hover::after {
+  width: 100%;
+}
+
+.nav-link-active {
+  color: #6366f1;
+  font-weight: 600;
+}
+
+.nav-link-active::after {
+  width: 100%;
+  background: linear-gradient(90deg, #8b5cf6, #6366f1);
+}
+</style>

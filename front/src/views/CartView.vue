@@ -113,9 +113,9 @@ const { cartItems, removeFromCart, updateQuantity, cartTotal } = useCart()
             <span class="font-medium text-gray-900">{{ t('common.egp') }} {{ cartTotal.toFixed(2) }}</span>
           </div>
 
-          <p class="text-sm text-gray-500 ltr:text-right rtl:text-left">
+          <!-- <p class="text-sm text-gray-500 ltr:text-right rtl:text-left">
             {{ t('cart.taxesNote') }}
-          </p>
+          </p> -->
 
           <!-- Checkout Button -->
           <a

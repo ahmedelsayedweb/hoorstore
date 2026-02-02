@@ -70,6 +70,7 @@ class OrderController extends Controller
             'delivery.phone' => 'required|string',
             'delivery.phone2' => 'nullable|string',
             'delivery.addressDetails' => 'nullable|string',
+            'notes' => 'nullable|string',
             'items' => 'required|array|min:1',
             'items.*.productId' => 'nullable|integer',
             'items.*.name' => 'required|string',
@@ -91,6 +92,7 @@ class OrderController extends Controller
             'governorate' => $delivery['governorate'],
             'phone' => $delivery['phone'],
             'phone2' => $delivery['phone2'] ?? null,
+            'notes' => $request->input('notes'),
             'shipping_method' => $request->input('shippingMethod', 'standard'),
             'payment_method' => $request->input('paymentMethod', 'cod'),
             'billing_address' => $request->input('billingAddress', 'same'),
@@ -172,6 +174,9 @@ class OrderController extends Controller
         $message .= "📍 المحافظة: {$order->governorate}\n";
         if ($order->address_details) {
             $message .= "📝 تفاصيل العنوان: {$order->address_details}\n";
+        }
+        if ($order->notes) {
+            $message .= "📋 ملاحظات: {$order->notes}\n";
         }
         $message .= "\n━━━━━━━━━━━━━━━\n";
         $message .= "🛍️ *المنتجات:*\n\n{$itemsList}\n\n";
@@ -397,6 +402,7 @@ class OrderController extends Controller
                     <p><strong>الهاتف:</strong> {$order->phone}" . ($order->phone2 ? " - {$order->phone2}" : "") . "</p>
                     <p><strong>المحافظة:</strong> {$order->governorate}</p>
                     " . ($order->address_details ? "<p><strong>تفاصيل العنوان:</strong> {$order->address_details}</p>" : "") . "
+                    " . ($order->notes ? "<p><strong>ملاحظات:</strong> {$order->notes}</p>" : "") . "
                 </div>
 
                 <h3>المنتجات</h3>
@@ -502,6 +508,7 @@ class OrderController extends Controller
                 'phone' => $order->phone,
                 'phone2' => $order->phone2,
             ],
+            'notes' => $order->notes,
             'shippingMethod' => $order->shipping_method,
             'paymentMethod' => $order->payment_method,
             'billingAddress' => $order->billing_address,

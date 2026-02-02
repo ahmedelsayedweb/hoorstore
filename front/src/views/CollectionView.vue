@@ -1,78 +1,79 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import ProductCard from '../components/ProductCard.vue'
 import AboutSection from '../components/AboutSection.vue'
 import SiteFooter from '../components/SiteFooter.vue'
+import { useCart } from '@/composables/useCart'
+import { productsApi } from '@/api/products'
 
+const { t } = useI18n()
+const { addToCart } = useCart()
 const route = useRoute()
+
+// Products data
+const products = ref([])
+const loading = ref(true)
+
+// Category tabs
+const categories = computed(() => [
+  { value: 'all', label: t('collection.all') },
+  { value: 'children', label: t('nav.children') },
+  { value: 'men', label: t('nav.men') },
+  { value: 'woman', label: t('nav.woman') }
+])
+
+// Initialize category from URL query parameter
+const validCategories = ['all', 'children', 'men', 'woman']
+const getCategoryFromQuery = () => {
+  console.log(route.query.category);
+  const queryCategory = route.query.category;
+  console.log(validCategories.includes(queryCategory) ? queryCategory : 'all');
+  return validCategories.includes(queryCategory) ? queryCategory : 'all'
+}
+
+const selectedCategory = ref(getCategoryFromQuery())
+
+// Watch for URL query changes
+watch(() => route.query.category, (newCategory) => {
+  selectedCategory.value = validCategories.includes(newCategory) ? newCategory : 'all'
+})
+
+// Hide tabs when category is specified in URL
+const hasCategoryInUrl = computed(() => !!route.query.category)
 
 // Filter states
 const isAvailabilityOpen = ref(false)
 const isPriceOpen = ref(false)
 const isSortOpen = ref(false)
 
-const selectedAvailability = ref('all')
 const selectedSort = ref('featured')
 
-// Sample products data
-const products = ref([
-  {
-    id: 1,
-    name: 'Basic shirt sleeve',
-    image: 'https://images.unsplash.com/photo-1594938298603-c8148c4dae35?w=600&h=800&fit=crop',
-    originalPrice: 600,
-    salePrice: 449,
-    rating: 5,
-    reviewCount: 715,
-    isOnSale: true
-  },
-  {
-    id: 2,
-    name: 'Ribbed Basic - Long Sleeve',
-    image: 'https://images.unsplash.com/photo-1434389677669-e08b4cac3105?w=600&h=800&fit=crop',
-    originalPrice: 449,
-    salePrice: 249,
-    rating: 0,
-    reviewCount: 0,
-    isOnSale: true
-  },
-  {
-    id: 3,
-    name: 'Half sleeve basic',
-    image: 'https://images.unsplash.com/photo-1485462537746-965f33f7f6a7?w=600&h=800&fit=crop',
-    originalPrice: 700,
-    salePrice: 449,
-    rating: 5,
-    reviewCount: 45,
-    isOnSale: true
-  },
-  {
-    id: 4,
-    name: 'HIGH NECK ZIPPER LONG SLEEVE',
-    image: 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=600&h=800&fit=crop',
-    originalPrice: 449,
-    salePrice: 249,
-    rating: 0,
-    reviewCount: 0,
-    isOnSale: true
-  }
+const sortOptions = computed(() => [
+  { value: 'featured', label: t('collection.featured') },
+  { value: 'price-asc', label: t('collection.priceLowToHigh') },
+  { value: 'price-desc', label: t('collection.priceHighToLow') },
+  { value: 'newest', label: t('collection.newest') }
 ])
 
-const sortOptions = [
-  { value: 'featured', label: 'Featured' },
-  { value: 'price-asc', label: 'Price: Low to High' },
-  { value: 'price-desc', label: 'Price: High to Low' },
-  { value: 'newest', label: 'Newest' }
-]
+// Filter products by category
+const filteredProducts = computed(() => {
+  if (selectedCategory.value === 'all') {
+    return products.value
+  }
+  console.log(selectedCategory.value);
+  return products.value.filter(p => p.category === selectedCategory.value)
+})
 
+// Sort filtered products
 const sortedProducts = computed(() => {
-  const sorted = [...products.value]
+  const sorted = [...filteredProducts.value]
   switch (selectedSort.value) {
     case 'price-asc':
-      return sorted.sort((a, b) => a.salePrice - b.salePrice)
+      return sorted.sort((a, b) => (a.salePrice || a.price) - (b.salePrice || b.price))
     case 'price-desc':
-      return sorted.sort((a, b) => b.salePrice - a.salePrice)
+      return sorted.sort((a, b) => (b.salePrice || b.price) - (a.salePrice || a.price))
     default:
       return sorted
   }
@@ -83,16 +84,61 @@ const closeAllDropdowns = () => {
   isPriceOpen.value = false
   isSortOpen.value = false
 }
+
+const handleAddToCart = (productId) => {
+  const product = products.value.find(p => p.id === productId)
+  if (product) {
+    addToCart({
+      id: product.id,
+      name: product.name,
+      price: product.salePrice || product.price,
+      image: product.image,
+      quantity: 1
+    })
+  }
+}
+
+// Fetch products on mount
+onMounted(async () => {
+  try {
+    products.value = await productsApi.getAll()
+  } catch (error) {
+    console.error('Failed to fetch products:', error)
+  } finally {
+    loading.value = false
+  }
+})
 </script>
 
 <template>
   <div @click="closeAllDropdowns">
+    <!-- Category Tabs -->
+    <div v-if="!hasCategoryInUrl" class="border-b border-gray-200">
+      <div class="max-w-7xl mx-auto px-5 lg:px-8">
+        <nav class="flex gap-8 -mb-px" aria-label="Tabs">
+          <button
+            v-for="category in categories"
+            :key="category.value"
+            @click="selectedCategory = category.value"
+            :class="[
+              'py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap transition-colors',
+              selectedCategory === category.value
+                ? 'border-primary text-primary'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            ]"
+          >
+            {{ category.label }}
+          </button>
+        </nav>
+      </div>
+    </div>
+
     <!-- Filters Bar -->
-    <div class="max-w-7xl mx-auto px-5 lg:px-8 py-6">
+    <div v-if="false" :class="`max-w-7xl mx-auto px-5 lg:px-8 py-6`">
       <div class="flex items-center justify-between">
         <!-- Left Filters -->
         <div class="flex items-center gap-6">
-          <span class="text-sm text-gray-500">Filter:</span>
+          <span class="text-sm text-gray-500">{{ t('collection.filter') }}:</span>
 
           <!-- Availability Filter -->
           <div class="relative" @click.stop>
@@ -100,7 +146,7 @@ const closeAllDropdowns = () => {
               @click="isAvailabilityOpen = !isAvailabilityOpen; isPriceOpen = false; isSortOpen = false"
               class="flex items-center gap-1.5 text-sm text-gray-700 hover:text-gray-900 bg-transparent border-none cursor-pointer"
             >
-              Availability
+              {{ t('collection.availability') }}
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
               </svg>
@@ -111,11 +157,11 @@ const closeAllDropdowns = () => {
             >
               <label class="flex items-center gap-2 cursor-pointer py-1">
                 <input type="checkbox" class="w-4 h-4 accent-primary" />
-                <span class="text-sm">In stock</span>
+                <span class="text-sm">{{ t('collection.inStock') }}</span>
               </label>
               <label class="flex items-center gap-2 cursor-pointer py-1">
                 <input type="checkbox" class="w-4 h-4 accent-primary" />
-                <span class="text-sm">Out of stock</span>
+                <span class="text-sm">{{ t('collection.outOfStock') }}</span>
               </label>
             </div>
           </div>
@@ -126,7 +172,7 @@ const closeAllDropdowns = () => {
               @click="isPriceOpen = !isPriceOpen; isAvailabilityOpen = false; isSortOpen = false"
               class="flex items-center gap-1.5 text-sm text-gray-700 hover:text-gray-900 bg-transparent border-none cursor-pointer"
             >
-              Price
+              {{ t('collection.price') }}
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
               </svg>
@@ -137,19 +183,19 @@ const closeAllDropdowns = () => {
             >
               <div class="flex items-center gap-3">
                 <div>
-                  <label class="text-xs text-gray-500 mb-1 block">Min</label>
+                  <label class="text-xs text-gray-500 mb-1 block">{{ t('collection.minPrice') }}</label>
                   <input
                     type="number"
-                    placeholder="LE 0"
+                    :placeholder="`${t('common.egp')} 0`"
                     class="w-20 px-2 py-1.5 border border-gray-300 text-sm"
                   />
                 </div>
                 <span class="text-gray-400 mt-4">-</span>
                 <div>
-                  <label class="text-xs text-gray-500 mb-1 block">Max</label>
+                  <label class="text-xs text-gray-500 mb-1 block">{{ t('collection.maxPrice') }}</label>
                   <input
                     type="number"
-                    placeholder="LE 1000"
+                    :placeholder="`${t('common.egp')} 1000`"
                     class="w-20 px-2 py-1.5 border border-gray-300 text-sm"
                   />
                 </div>
@@ -165,7 +211,7 @@ const closeAllDropdowns = () => {
               @click="isSortOpen = !isSortOpen; isAvailabilityOpen = false; isPriceOpen = false"
               class="flex items-center gap-1.5 text-sm text-gray-700 hover:text-gray-900 bg-transparent border-none cursor-pointer"
             >
-              Sort by:
+              {{ t('collection.sortBy') }}:
               <span class="text-gray-900">{{ sortOptions.find(o => o.value === selectedSort)?.label }}</span>
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
@@ -186,26 +232,39 @@ const closeAllDropdowns = () => {
               </button>
             </div>
           </div>
-
-          <span class="text-sm text-gray-500">{{ products.length }} products</span>
+          <span class="text-sm text-gray-500">{{ filteredProducts.length }} {{ t('collection.products') }}</span>
         </div>
       </div>
     </div>
 
     <!-- Products Grid -->
-    <div class="max-w-7xl mx-auto px-5 lg:px-8 pb-16">
-      <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5 lg:gap-8">
+    <div :class="`${hasCategoryInUrl ? 'mt-16' : 'mt-8'} max-w-7xl mx-auto px-5 lg:px-8 pb-16`">
+      <!-- Loading State -->
+      <div v-if="loading" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5 lg:gap-8">
+        <div v-for="n in 8" :key="n" class="animate-pulse">
+          <div class="bg-gray-200 aspect-[3/4] rounded-lg mb-3"></div>
+          <div class="bg-gray-200 h-4 rounded w-3/4 mb-2"></div>
+          <div class="bg-gray-200 h-4 rounded w-1/2"></div>
+        </div>
+      </div>
+
+      <!-- Empty State -->
+      <div v-else-if="sortedProducts.length === 0" class="text-center py-16">
+        <p class="text-gray-500 text-lg">{{ t('collection.noProducts') }}</p>
+      </div>
+
+      <!-- Products -->
+      <div v-else class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5 lg:gap-8">
         <ProductCard
           v-for="product in sortedProducts"
           :key="product.id"
           :id="product.id"
           :image="product.image"
           :name="product.name"
-          :originalPrice="product.originalPrice"
-          :salePrice="product.salePrice"
-          :rating="product.rating"
-          :reviewCount="product.reviewCount"
-          :isOnSale="product.isOnSale"
+          :original-price="product.price"
+          :sale-price="product.salePrice"
+          :is-on-sale="!!product.salePrice"
+          @add-to-cart="handleAddToCart"
         />
       </div>
     </div>

@@ -1,10 +1,15 @@
 <script setup>
+import { useI18n } from 'vue-i18n'
 import ProductCard from './ProductCard.vue'
+import { useCart } from '@/composables/useCart'
+
+const { t } = useI18n()
+const { addToCart } = useCart()
 
 defineProps({
   title: {
     type: String,
-    default: 'White Friday Sale Up to 50%'
+    default: ''
   },
   viewAllLink: {
     type: String,
@@ -51,13 +56,26 @@ const products = [
     link: '/products/check-shirt'
   }
 ]
+
+const handleAddToCart = (productId) => {
+  const product = products.find(p => p.id === productId)
+  if (product) {
+    addToCart({
+      id: product.id,
+      name: product.name,
+      price: product.salePrice || product.originalPrice,
+      image: product.image,
+      quantity: 1
+    })
+  }
+}
 </script>
 
 <template>
   <section class="py-12 px-4 md:px-8 lg:px-16">
     <!-- Section Title -->
     <h2 class="text-2xl md:text-3xl font-normal text-center text-gray-900 mb-10">
-      {{ title }}
+      {{ title || t('collection.whiteFridaySale') }}
     </h2>
 
     <!-- Products Grid -->
@@ -71,6 +89,7 @@ const products = [
         :original-price="product.originalPrice"
         :sale-price="product.salePrice"
         :is-on-sale="product.isOnSale"
+        @add-to-cart="handleAddToCart"
       />
     </div>
 
@@ -80,7 +99,7 @@ const products = [
         :href="viewAllLink"
         class="inline-block border border-gray-900 text-gray-900 px-8 py-3 text-sm hover:bg-gray-900 hover:text-white transition-colors duration-300"
       >
-        View all
+        {{ t('common.viewAll') }}
       </a>
     </div>
   </section>
