@@ -14,6 +14,9 @@ class Product extends Model
         'image',
         'images',
         'sizes',
+        'colors',
+        'heights',
+        'weights',
         'description',
         'inStock',
     ];
@@ -23,6 +26,9 @@ class Product extends Model
         'salePrice' => 'float',
         'images' => 'array',
         'sizes' => 'array',
+        'colors' => 'array',
+        'heights' => 'array',
+        'weights' => 'array',
         'inStock' => 'boolean',
     ];
 }

@@ -30,6 +30,7 @@
     "color": "Color",
     "size": "Size",
     "height": "Height",
+    "weight": "Weight",
     "quantity": "Quantity",
     "description": "Description",
     "price": "Price",

@@ -3,6 +3,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useCart } from '../composables/useCart'
 import { ordersApi, shippingApi } from '../api/cart'
+import { productsApi } from '../api/products'
 
 const ORDERS_STORAGE_KEY = 'hoor_orders'
 const CUSTOMER_INFO_STORAGE_KEY = 'hoor_customer_info'
@@ -15,20 +16,42 @@ const editingItem = ref(null)
 const editForm = ref({
   size: '',
   height: '',
+  weight: '',
   quantity: 1
 })
+const loadingProduct = ref(false)
 
-// Available sizes and heights
-const availableSizes = ['S', 'M', 'L', 'XL', 'XXL', 'Small', 'Medium', 'Large', 'XLarge']
-const availableHeights = ['90 cm', '100 cm', '110 cm', '120 cm', '130 cm', '140 cm', '150 cm', '160 cm']
+// Available sizes, heights and weights from product
+const availableSizes = ref([])
+const availableHeights = ref([])
+const availableWeights = ref([])
 
-// Open edit modal
-const openEditModal = (item) => {
+// Open edit modal and fetch product details
+const openEditModal = async (item) => {
   editingItem.value = item
   editForm.value = {
     size: item.size || '',
     height: item.height || '',
+    weight: item.weight || '',
     quantity: item.quantity
+  }
+
+  // Fetch product to get available sizes, heights and weights
+  if (item.productId) {
+    loadingProduct.value = true
+    try {
+      const product = await productsApi.getById(item.productId)
+      availableSizes.value = product.sizes || []
+      availableHeights.value = product.heights || []
+      availableWeights.value = product.weights || []
+    } catch (error) {
+      console.error('Failed to load product:', error)
+      availableSizes.value = []
+      availableHeights.value = []
+      availableWeights.value = []
+    } finally {
+      loadingProduct.value = false
+    }
   }
 }
 
@@ -43,6 +66,7 @@ const saveEditedItem = async () => {
     await updateCartItem(editingItem.value.id, {
       size: editForm.value.size,
       height: editForm.value.height,
+      weight: editForm.value.weight,
       quantity: editForm.value.quantity
     })
     closeEditModal()
@@ -224,6 +248,13 @@ const orderScreenshot = ref(null)
 const formErrors = ref({})
 const errorMessage = ref('')
 
+// Clear field error
+const clearFieldError = (field) => {
+  if (formErrors.value[field]) {
+    delete formErrors.value[field]
+  }
+}
+
 
 
 // Computed values
@@ -237,127 +268,384 @@ const isFormValid = computed(() => {
     delivery.value.phone
 })
 
-// Generate order image using canvas (simpler approach)
+// Generate order image using canvas with proper Arabic/English support
 const takeScreenshot = async () => {
   try {
     const canvas = document.createElement('canvas')
     const ctx = canvas.getContext('2d')
+    const isArabic = locale.value === 'ar'
+
+    // Calculate dynamic height based on items
+    const baseHeight = 520
+    const itemHeight = 80
+    const notesHeight = notes.value ? 60 : 0
+    const totalHeight = baseHeight + (cartItems.value.length * itemHeight) + notesHeight
 
     canvas.width = 600
-    canvas.height = 800
+    canvas.height = Math.max(700, totalHeight)
 
-    // White background
+    const width = canvas.width
+    const padding = 30
+    const contentWidth = width - (padding * 2)
+
+    // Helper for RTL text positioning
+    const getX = (leftPos, rightPos) => isArabic ? rightPos : leftPos
+    const getAlign = (ltrAlign) => {
+      if (ltrAlign === 'left') return isArabic ? 'right' : 'left'
+      if (ltrAlign === 'right') return isArabic ? 'left' : 'right'
+      return ltrAlign
+    }
+
+    // White background with subtle border
     ctx.fillStyle = '#ffffff'
     ctx.fillRect(0, 0, canvas.width, canvas.height)
 
-    // Header
-    ctx.fillStyle = '#c9a66b'
-    ctx.fillRect(0, 0, 600, 60)
+    // Border
+    ctx.strokeStyle = '#e5e5e5'
+    ctx.lineWidth = 2
+    ctx.strokeRect(1, 1, canvas.width - 2, canvas.height - 2)
+
+    // Header with primary color
+    ctx.fillStyle = '#5b3a8c'
+    ctx.fillRect(0, 0, width, 80)
+
+    // Store logo/name
     ctx.fillStyle = '#ffffff'
-    ctx.font = 'bold 24px Arial'
+    ctx.font = 'bold 28px Arial, sans-serif'
     ctx.textAlign = 'center'
-    ctx.fillText('HOOR', 300, 40)
+    ctx.fillText(isArabic ? 'متجر حور' : 'HOOR STORE', width / 2, 45)
 
-    // Order details
-    ctx.fillStyle = '#333333'
-    ctx.font = 'bold 18px Arial'
-    ctx.textAlign = 'left'
-    ctx.fillText(`Order #${completedOrder.value?.orderNumber || ''}`, 30, 100)
+    // Order number badge
+    ctx.font = '14px Arial, sans-serif'
+    ctx.fillText(`${isArabic ? 'رقم الطلب' : 'Order'} #${completedOrder.value?.orderNumber || ''}`, width / 2, 68)
 
-    ctx.font = '14px Arial'
-    ctx.fillStyle = '#666666'
-    let y = 140
+    let y = 110
 
-    // Customer info
-    ctx.fillStyle = '#333333'
-    ctx.font = 'bold 14px Arial'
-    ctx.fillText('Customer Information:', 30, y)
-    y += 25
-    ctx.font = '14px Arial'
-    ctx.fillStyle = '#666666'
-    ctx.fillText(`Contact: ${contact.value}`, 30, y)
-    y += 20
-    ctx.fillText(`Name: ${delivery.value.fullName}`, 30, y)
-    y += 20
-    const phoneText = delivery.value.phone2 ? `${delivery.value.phone} - ${delivery.value.phone2}` : delivery.value.phone
-    ctx.fillText(`Phone: ${phoneText}`, 30, y)
-    y += 20
-    ctx.fillText(`Governorate: ${delivery.value.governorate}`, 30, y)
-    if (delivery.value.addressDetails) {
-      y += 18
-      ctx.fillStyle = '#888888'
-      ctx.font = '12px Arial'
-      ctx.fillText(delivery.value.addressDetails, 30, y)
-      ctx.font = '14px Arial'
-    }
-    if (notes.value) {
-      y += 25
-      ctx.fillStyle = '#333333'
-      ctx.font = 'bold 14px Arial'
-      ctx.fillText('Notes:', 30, y)
-      y += 18
-      ctx.fillStyle = '#888888'
-      ctx.font = '12px Arial'
-      ctx.fillText(notes.value, 30, y)
-      ctx.font = '14px Arial'
-    }
+    // Success checkmark
+    ctx.beginPath()
+    ctx.arc(width / 2, y, 25, 0, 2 * Math.PI)
+    ctx.fillStyle = '#ede9f3'
+    ctx.fill()
+    ctx.strokeStyle = '#5b3a8c'
+    ctx.lineWidth = 3
+    ctx.stroke()
+
+    // Checkmark
+    ctx.beginPath()
+    ctx.moveTo(width / 2 - 10, y)
+    ctx.lineTo(width / 2 - 3, y + 8)
+    ctx.lineTo(width / 2 + 12, y - 8)
+    ctx.strokeStyle = '#5b3a8c'
+    ctx.lineWidth = 3
+    ctx.stroke()
+
+    y += 50
+
+    // Success message
+    ctx.fillStyle = '#5b3a8c'
+    ctx.font = 'bold 18px Arial, sans-serif'
+    ctx.textAlign = 'center'
+    ctx.fillText(isArabic ? 'تم الطلب بنجاح!' : 'Order Placed Successfully!', width / 2, y)
+
     y += 40
 
-    // Items
-    ctx.fillStyle = '#333333'
-    ctx.font = 'bold 14px Arial'
-    ctx.fillText('Order Items:', 30, y)
-    y += 25
-
-    ctx.font = '14px Arial'
-    cartItems.value.forEach(item => {
-      ctx.fillStyle = '#333333'
-      ctx.fillText(`${item.name}`, 30, y)
-      ctx.fillStyle = '#666666'
-      ctx.fillText(`${item.color} / ${item.size} / ${item.height}`, 30, y + 18)
-      ctx.fillText(`Qty: ${item.quantity}`, 30, y + 36)
-      ctx.fillStyle = '#333333'
-      ctx.textAlign = 'right'
-      ctx.fillText(`${(item.price * item.quantity).toFixed(2)} ${currencySymbol.value}`, 570, y + 18)
-      ctx.textAlign = 'left'
-      y += 60
-    })
-
-    // Totals
-    y += 20
-    ctx.strokeStyle = '#dddddd'
+    // Divider
+    ctx.strokeStyle = '#e5e5e5'
+    ctx.lineWidth = 1
     ctx.beginPath()
-    ctx.moveTo(30, y)
-    ctx.lineTo(570, y)
+    ctx.moveTo(padding, y)
+    ctx.lineTo(width - padding, y)
     ctx.stroke()
+
     y += 25
 
-    ctx.font = '14px Arial'
-    ctx.fillText('Subtotal:', 30, y)
-    ctx.textAlign = 'right'
-    ctx.fillText(`${subtotal.value.toFixed(2)} ${currencySymbol.value}`, 570, y)
-    ctx.textAlign = 'left'
+    // Customer Information Section
+    ctx.fillStyle = '#5b3a8c'
+    ctx.font = 'bold 16px Arial, sans-serif'
+    ctx.textAlign = getAlign('left')
+    ctx.fillText(
+      isArabic ? 'بيانات العميل' : 'Customer Information',
+      getX(padding, width - padding),
+      y
+    )
+
+    y += 25
+    ctx.fillStyle = '#374151'
+    ctx.font = '14px Arial, sans-serif'
+
+    // Name
+    const nameLabel = isArabic ? 'الاسم:' : 'Name:'
+    ctx.font = 'bold 14px Arial, sans-serif'
+    ctx.fillText(nameLabel, getX(padding, width - padding), y)
+    ctx.font = '14px Arial, sans-serif'
+    const nameLabelWidth = ctx.measureText(nameLabel).width + 10
+    ctx.fillText(
+      delivery.value.fullName,
+      getX(padding + nameLabelWidth, width - padding - nameLabelWidth),
+      y
+    )
+
     y += 22
 
-    ctx.fillText('Shipping:', 30, y)
-    ctx.textAlign = 'right'
-    ctx.fillText(`${shippingCost.value.toFixed(2)} ${currencySymbol.value}`, 570, y)
-    ctx.textAlign = 'left'
-    y += 30
+    // Phone
+    const phoneLabel = isArabic ? 'الهاتف:' : 'Phone:'
+    ctx.font = 'bold 14px Arial, sans-serif'
+    ctx.fillText(phoneLabel, getX(padding, width - padding), y)
+    ctx.font = '14px Arial, sans-serif'
+    const phoneLabelWidth = ctx.measureText(phoneLabel).width + 10
+    const phoneText = delivery.value.phone2 ? `${delivery.value.phone} - ${delivery.value.phone2}` : delivery.value.phone
+    ctx.fillText(
+      phoneText,
+      getX(padding + phoneLabelWidth, width - padding - phoneLabelWidth),
+      y
+    )
 
-    ctx.font = 'bold 18px Arial'
-    ctx.fillText('Total:', 30, y)
-    ctx.textAlign = 'right'
-    ctx.fillText(`${total.value.toFixed(2)} ${currencySymbol.value}`, 570, y)
-    ctx.textAlign = 'left'
-    y += 40
+    y += 22
 
-    // Payment method
-    ctx.fillStyle = '#e8f5e9'
-    ctx.fillRect(30, y, 540, 40)
-    ctx.fillStyle = '#333333'
-    ctx.font = '14px Arial'
-    ctx.fillText('Payment: Cash on Delivery (COD)', 45, y + 26)
+    // Email (if exists)
+    if (contact.value) {
+      const emailLabel = isArabic ? 'البريد:' : 'Email:'
+      ctx.font = 'bold 14px Arial, sans-serif'
+      ctx.fillText(emailLabel, getX(padding, width - padding), y)
+      ctx.font = '14px Arial, sans-serif'
+      const emailLabelWidth = ctx.measureText(emailLabel).width + 10
+      ctx.fillText(
+        contact.value,
+        getX(padding + emailLabelWidth, width - padding - emailLabelWidth),
+        y
+      )
+      y += 22
+    }
+
+    // Governorate
+    const govLabel = isArabic ? 'المحافظة:' : 'Governorate:'
+    ctx.font = 'bold 14px Arial, sans-serif'
+    ctx.fillText(govLabel, getX(padding, width - padding), y)
+    ctx.font = '14px Arial, sans-serif'
+    const govLabelWidth = ctx.measureText(govLabel).width + 10
+    const govName = t('checkout.governorates.' + delivery.value.governorate)
+    ctx.fillText(
+      govName,
+      getX(padding + govLabelWidth, width - padding - govLabelWidth),
+      y
+    )
+
+    y += 22
+
+    // Address
+    if (delivery.value.addressDetails) {
+      const addrLabel = isArabic ? 'العنوان:' : 'Address:'
+      ctx.font = 'bold 14px Arial, sans-serif'
+      ctx.fillText(addrLabel, getX(padding, width - padding), y)
+      y += 18
+      ctx.font = '13px Arial, sans-serif'
+      ctx.fillStyle = '#6b7280'
+
+      // Wrap long address text
+      const maxWidth = contentWidth - 20
+      const words = delivery.value.addressDetails.split(' ')
+      let line = ''
+      for (let word of words) {
+        const testLine = line + word + ' '
+        if (ctx.measureText(testLine).width > maxWidth && line !== '') {
+          ctx.fillText(line.trim(), getX(padding + 10, width - padding - 10), y)
+          line = word + ' '
+          y += 18
+        } else {
+          line = testLine
+        }
+      }
+      if (line.trim()) {
+        ctx.fillText(line.trim(), getX(padding + 10, width - padding - 10), y)
+      }
+      ctx.fillStyle = '#374151'
+    }
+
+    y += 25
+
+    // Notes (if exists)
+    if (notes.value) {
+      const notesLabel = isArabic ? 'ملاحظات:' : 'Notes:'
+      ctx.font = 'bold 14px Arial, sans-serif'
+      ctx.fillStyle = '#5b3a8c'
+      ctx.fillText(notesLabel, getX(padding, width - padding), y)
+      y += 18
+      ctx.font = '13px Arial, sans-serif'
+      ctx.fillStyle = '#6b7280'
+      ctx.fillText(notes.value, getX(padding + 10, width - padding - 10), y)
+      y += 25
+    }
+
+    // Divider
+    ctx.strokeStyle = '#e5e5e5'
+    ctx.beginPath()
+    ctx.moveTo(padding, y)
+    ctx.lineTo(width - padding, y)
+    ctx.stroke()
+
+    y += 25
+
+    // Order Items Section
+    ctx.fillStyle = '#5b3a8c'
+    ctx.font = 'bold 16px Arial, sans-serif'
+    ctx.textAlign = getAlign('left')
+    ctx.fillText(
+      isArabic ? 'المنتجات' : 'Order Items',
+      getX(padding, width - padding),
+      y
+    )
+
+    y += 20
+
+    // Items
+    cartItems.value.forEach((item, index) => {
+      // Item background
+      if (index % 2 === 0) {
+        ctx.fillStyle = '#fafafa'
+        ctx.fillRect(padding, y - 5, contentWidth, 70)
+      }
+
+      y += 15
+
+      // Item name
+      ctx.fillStyle = '#1f2937'
+      ctx.font = 'bold 14px Arial, sans-serif'
+      ctx.textAlign = getAlign('left')
+      ctx.fillText(item.name, getX(padding + 10, width - padding - 10), y)
+
+      // Price on the opposite side
+      ctx.textAlign = getAlign('right')
+      ctx.fillStyle = '#5b3a8c'
+      ctx.fillText(
+        `${(item.price * item.quantity).toFixed(2)} ${currencySymbol.value}`,
+        getX(width - padding - 10, padding + 10),
+        y
+      )
+
+      y += 20
+
+      // Item details (color, size, height, weight)
+      ctx.fillStyle = '#6b7280'
+      ctx.font = '13px Arial, sans-serif'
+      ctx.textAlign = getAlign('left')
+      const details = [item.color, item.size, item.height, item.weight].filter(Boolean).join(' | ')
+      ctx.fillText(details, getX(padding + 10, width - padding - 10), y)
+
+      y += 18
+
+      // Quantity
+      const qtyLabel = isArabic ? 'الكمية:' : 'Qty:'
+      ctx.fillText(`${qtyLabel} ${item.quantity}`, getX(padding + 10, width - padding - 10), y)
+
+      y += 25
+    })
+
+    y += 10
+
+    // Totals Section with background
+    ctx.fillStyle = '#f9fafb'
+    ctx.fillRect(padding, y, contentWidth, 100)
+
+    // Border for totals
+    ctx.strokeStyle = '#e5e5e5'
+    ctx.strokeRect(padding, y, contentWidth, 100)
+
+    y += 25
+
+    // Subtotal
+    ctx.fillStyle = '#374151'
+    ctx.font = '14px Arial, sans-serif'
+    ctx.textAlign = getAlign('left')
+    ctx.fillText(
+      isArabic ? 'المجموع الفرعي' : 'Subtotal',
+      getX(padding + 15, width - padding - 15),
+      y
+    )
+    ctx.textAlign = getAlign('right')
+    ctx.fillText(
+      `${subtotal.value.toFixed(2)} ${currencySymbol.value}`,
+      getX(width - padding - 15, padding + 15),
+      y
+    )
+
+    y += 22
+
+    // Shipping
+    ctx.textAlign = getAlign('left')
+    ctx.fillText(
+      isArabic ? 'الشحن' : 'Shipping',
+      getX(padding + 15, width - padding - 15),
+      y
+    )
+    ctx.textAlign = getAlign('right')
+    ctx.fillText(
+      `${shippingCost.value.toFixed(2)} ${currencySymbol.value}`,
+      getX(width - padding - 15, padding + 15),
+      y
+    )
+
+    y += 28
+
+    // Total
+    ctx.fillStyle = '#1f2937'
+    ctx.font = 'bold 18px Arial, sans-serif'
+    ctx.textAlign = getAlign('left')
+    ctx.fillText(
+      isArabic ? 'الإجمالي' : 'Total',
+      getX(padding + 15, width - padding - 15),
+      y
+    )
+    ctx.fillStyle = '#5b3a8c'
+    ctx.textAlign = getAlign('right')
+    ctx.fillText(
+      `${total.value.toFixed(2)} ${currencySymbol.value}`,
+      getX(width - padding - 15, padding + 15),
+      y
+    )
+
+    y += 45
+
+    // Payment Method Badge
+    ctx.fillStyle = '#ede9f3'
+    const badgeWidth = 250
+    const badgeX = (width - badgeWidth) / 2
+    ctx.beginPath()
+    ctx.roundRect(badgeX, y, badgeWidth, 35, 8)
+    ctx.fill()
+
+    ctx.fillStyle = '#5b3a8c'
+    ctx.font = '14px Arial, sans-serif'
+    ctx.textAlign = 'center'
+    ctx.fillText(
+      isArabic ? 'الدفع عند الاستلام' : 'Cash on Delivery',
+      width / 2,
+      y + 23
+    )
+
+    y += 55
+
+    // Footer
+    ctx.fillStyle = '#9ca3af'
+    ctx.font = '12px Arial, sans-serif'
+    ctx.textAlign = 'center'
+    ctx.fillText(
+      isArabic ? 'شكراً لتسوقكم من متجر حور' : 'Thank you for shopping at HOOR Store',
+      width / 2,
+      y
+    )
+
+    y += 18
+    ctx.fillText(
+      new Date().toLocaleDateString(isArabic ? 'ar-EG' : 'en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      }),
+      width / 2,
+      y
+    )
 
     return canvas.toDataURL('image/png')
   } catch (error) {
@@ -495,8 +783,8 @@ const continueShopping = () => {
     <!-- Order Success Modal -->
     <div v-if="orderComplete" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div class="bg-white rounded-lg max-w-md w-full p-6 text-center">
-        <div class="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-          <svg class="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div class="w-16 h-16 bg-primary/20 rounded-full flex items-center justify-center mx-auto mb-4">
+          <svg class="w-8 h-8 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
           </svg>
         </div>
@@ -512,7 +800,7 @@ const continueShopping = () => {
           <button
             v-if="orderScreenshot"
             @click="downloadScreenshot"
-            class="w-full py-3 bg-[#c9a66b] text-white rounded font-medium hover:bg-[#b8955a] transition-colors flex items-center justify-center gap-2"
+            class="w-full py-3 bg-primary text-white rounded font-medium hover:bg-primary/90 transition-colors flex items-center justify-center gap-2"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -551,9 +839,17 @@ const continueShopping = () => {
           </div>
         </div>
 
-        <div class="space-y-4">
+        <!-- Loading state -->
+        <div v-if="loadingProduct" class="flex items-center justify-center py-8">
+          <svg class="w-8 h-8 animate-spin text-primary" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+        </div>
+
+        <div v-else class="space-y-4">
           <!-- Size -->
-          <div>
+          <div v-if="availableSizes.length > 0">
             <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('product.size') }}</label>
             <select
               v-model="editForm.size"
@@ -564,13 +860,24 @@ const continueShopping = () => {
           </div>
 
           <!-- Height -->
-          <div>
+          <div v-if="availableHeights.length > 0">
             <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('product.height') }}</label>
             <select
               v-model="editForm.height"
               class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-primary"
             >
               <option v-for="height in availableHeights" :key="height" :value="height">{{ height }}</option>
+            </select>
+          </div>
+
+          <!-- Weight -->
+          <div v-if="availableWeights.length > 0">
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('product.weight') }}</label>
+            <select
+              v-model="editForm.weight"
+              class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-primary"
+            >
+              <option v-for="weight in availableWeights" :key="weight" :value="weight">{{ weight }}</option>
             </select>
           </div>
 
@@ -604,7 +911,7 @@ const continueShopping = () => {
           </div>
         </div>
 
-        <div class="flex gap-3 mt-6">
+        <div v-if="!loadingProduct" class="flex gap-3 mt-6">
           <button
             @click="closeEditModal"
             class="flex-1 py-2 border border-gray-300 text-gray-700 rounded font-medium hover:bg-gray-50 transition-colors"
@@ -624,7 +931,7 @@ const continueShopping = () => {
     <div class="max-w-6xl mx-auto px-4 py-8">
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-12">
         <!-- Left Column - Form -->
-        <div class="space-y-8">
+        <form class="space-y-8" @submit.prevent="submitOrder">
           <!-- Delivery Section -->
           <section>
             <h2 class="text-xl font-medium text-gray-900 mb-4">{{ $t('checkout.deliveryInfo') }}</h2>
@@ -635,40 +942,74 @@ const continueShopping = () => {
                 <input
                   v-model="delivery.fullName"
                   type="text"
+                  required
                   :placeholder="$t('checkout.fullNamePlaceholder')"
-                  class="w-full px-4 py-3 border border-gray-300 rounded focus:outline-none focus:border-gray-500"
+                  :class="[
+                    'w-full px-4 py-3 border rounded focus:outline-none',
+                    formErrors['delivery.fullName'] ? 'border-red-500 focus:border-red-500' : 'border-gray-300 focus:border-gray-500'
+                  ]"
+                  @input="clearFieldError('delivery.fullName')"
                 />
+                <p v-if="formErrors['delivery.fullName']" class="mt-1 text-xs text-red-500">
+                  {{ formErrors['delivery.fullName'][0] }}
+                </p>
               </div>
 
               <!-- Phone Numbers -->
-              <label class="block text-xs text-gray-500 mb-1">{{ $t('checkout.phonePlaceholder') }}</label>
-              <div class="grid grid-cols-2 gap-4">
-                <input
-                  v-model="delivery.phone"
-                  type="tel"
-                  :placeholder="$t('checkout.phonePlaceholder')"
-                  class="px-4 py-3 border border-gray-300 rounded focus:outline-none focus:border-gray-500"
-                />
-                <input
-                  v-model="delivery.phone2"
-                  type="tel"
-                  :placeholder="$t('checkout.phone2Placeholder')"
-                  class="px-4 py-3 border border-gray-300 rounded focus:outline-none focus:border-gray-500"
-                />
+              <div>
+                <label class="block text-xs text-gray-500 mb-1">{{ $t('checkout.phonePlaceholder') }}</label>
+                <div class="grid grid-cols-2 gap-4">
+                  <div>
+                    <input
+                      required
+                      v-model="delivery.phone"
+                      type="tel"
+                      :placeholder="$t('checkout.phonePlaceholder')"
+                      :class="[
+                        'w-full px-4 py-3 border rounded focus:outline-none',
+                        formErrors['delivery.phone'] ? 'border-red-500 focus:border-red-500' : 'border-gray-300 focus:border-gray-500'
+                      ]"
+                      @input="clearFieldError('delivery.phone')"
+                    />
+                    <p v-if="formErrors['delivery.phone']" class="mt-1 text-xs text-red-500">
+                      {{ formErrors['delivery.phone'][0] }}
+                    </p>
+                  </div>
+                  <div>
+                    <input
+                      v-model="delivery.phone2"
+                      type="tel"
+                      :placeholder="$t('checkout.phone2Placeholder')"
+                      :class="[
+                        'w-full px-4 py-3 border rounded focus:outline-none',
+                        formErrors['delivery.phone2'] ? 'border-red-500 focus:border-red-500' : 'border-gray-300 focus:border-gray-500'
+                      ]"
+                      @input="clearFieldError('delivery.phone2')"
+                    />
+                    <p v-if="formErrors['delivery.phone2']" class="mt-1 text-xs text-red-500">
+                      {{ formErrors['delivery.phone2'][0] }}
+                    </p>
+                  </div>
+                </div>
               </div>
 
               <!-- Email (Optional) -->
-              <label class="block text-xs text-gray-500 mb-1">{{ $t('checkout.emailPlaceholder') }}</label>
-              <input
-                v-model="contact"
-                type="email"
-                :placeholder="$t('checkout.emailPlaceholder')"
-                :class="[
-                  'w-full px-4 py-3 border rounded focus:outline-none',
-                  formErrors.contact ? 'border-red-500 focus:border-red-500' : 'border-gray-300 focus:border-gray-500'
-                ]"
-                @input="formErrors.contact = null; errorMessage = ''"
-              />
+              <div>
+                <label class="block text-xs text-gray-500 mb-1">{{ $t('checkout.emailPlaceholder') }}</label>
+                <input
+                  v-model="contact"
+                  type="email"
+                  :placeholder="$t('checkout.emailPlaceholder')"
+                  :class="[
+                    'w-full px-4 py-3 border rounded focus:outline-none',
+                    formErrors.contact ? 'border-red-500 focus:border-red-500' : 'border-gray-300 focus:border-gray-500'
+                  ]"
+                  @input="clearFieldError('contact')"
+                />
+                <p v-if="formErrors.contact" class="mt-1 text-xs text-red-500">
+                  {{ formErrors.contact[0] }}
+                </p>
+              </div>
 
               <!-- Country -->
               <div v-show="false">
@@ -686,20 +1027,37 @@ const continueShopping = () => {
                 <label class="block text-xs text-gray-500 mb-1">{{ $t('checkout.governoratePlaceholder') }}</label>
                 <select
                   v-model="delivery.governorate"
-                  class="w-full px-4 py-3 border border-gray-300 rounded bg-white focus:outline-none focus:border-gray-500"
+                  :class="[
+                    'w-full px-4 py-3 border rounded bg-white focus:outline-none',
+                    formErrors['delivery.governorate'] ? 'border-red-500 focus:border-red-500' : 'border-gray-300 focus:border-gray-500'
+                  ]"
+                  @change="clearFieldError('delivery.governorate')"
                 >
                   <option v-for="key in governorateKeys" :key="key" :value="key">{{ $t('checkout.governorates.' + key) }}</option>
                 </select>
+                <p v-if="formErrors['delivery.governorate']" class="mt-1 text-xs text-red-500">
+                  {{ formErrors['delivery.governorate'][0] }}
+                </p>
               </div>
 
               <!-- Address Details -->
-              <label class="block text-xs text-gray-500 mb-1">{{ $t('checkout.addressDetailsPlaceholder') }}</label>
-              <textarea
-                v-model="delivery.addressDetails"
-                :placeholder="$t('checkout.addressDetailsPlaceholder')"
-                rows="2"
-                class="w-full px-4 py-3 border border-gray-300 rounded focus:outline-none focus:border-gray-500 resize-none"
-              ></textarea>
+              <div>
+                <label class="block text-xs text-gray-500 mb-1">{{ $t('checkout.addressDetailsPlaceholder') }}</label>
+                <textarea
+                  required
+                  v-model="delivery.addressDetails"
+                  :placeholder="$t('checkout.addressDetailsPlaceholder')"
+                  rows="2"
+                  :class="[
+                    'w-full px-4 py-3 border rounded focus:outline-none resize-none',
+                    formErrors['delivery.addressDetails'] ? 'border-red-500 focus:border-red-500' : 'border-gray-300 focus:border-gray-500'
+                  ]"
+                  @input="clearFieldError('delivery.addressDetails')"
+                ></textarea>
+                <p v-if="formErrors['delivery.addressDetails']" class="mt-1 text-xs text-red-500">
+                  {{ formErrors['delivery.addressDetails'][0] }}
+                </p>
+              </div>
 
               <!-- Order Notes -->
               <div>
@@ -806,9 +1164,9 @@ const continueShopping = () => {
 
           <!-- Submit Button -->
           <button
-            @click="submitOrder"
+            type="submit"
             :disabled="isSubmitting || cartItems.length === 0"
-            class="w-full py-4 bg-gray-900 text-white text-sm font-medium rounded hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            class="w-full py-4 bg-primary text-white text-sm font-medium rounded hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             <svg v-if="isSubmitting" class="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -816,7 +1174,7 @@ const continueShopping = () => {
             </svg>
             {{ isSubmitting ? $t('checkout.processing') : $t('checkout.placeOrder') }}
           </button>
-        </div>
+        </form>
 
         <!-- Right Column - Order Summary -->
         <div :class="[isRTL ? 'lg:border-l lg:pl-12' : 'lg:border-r lg:pr-12', 'lg:border-gray-200']">
@@ -842,7 +1200,7 @@ const continueShopping = () => {
                 </div>
                 <div class="flex-1 min-w-0">
                   <h3 class="text-sm font-medium text-gray-900 truncate">{{ item.name }}</h3>
-                  <p class="text-xs text-gray-500">{{ item.color }} / {{ item.size }} / {{ item.height }}</p>
+                  <p class="text-xs text-gray-500">{{ [item.color, item.size, item.height, item.weight].filter(Boolean).join(' / ') }}</p>
                   <p class="text-sm font-medium text-gray-900 mt-1">{{ (item.price * item.quantity).toFixed(2) }} {{ $t('common.egp') }}</p>
                   <!-- Edit/Delete Buttons -->
                   <div class="flex gap-2 mt-2">

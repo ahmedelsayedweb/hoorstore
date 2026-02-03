@@ -388,7 +388,7 @@ class OrderController extends Controller
 
         $html = "
         <div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;'>
-            <div style='background: #c9a66b; padding: 20px; text-align: center;'>
+            <div style='background: #5b3a8c; padding: 20px; text-align: center;'>
                 <h1 style='color: white; margin: 0;'>HOOR STORE</h1>
             </div>
 

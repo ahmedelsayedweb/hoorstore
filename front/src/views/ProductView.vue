@@ -39,10 +39,17 @@ const fetchProduct = async () => {
       colors: data.colors || [],
       sizes: data.sizes || [],
       heights: data.heights || [],
+      weights: data.weights || [],
       description: data.description && typeof data.description === 'object'
         ? data.description
         : { title: data.name, details: [], note: '', footer: data.description || '' }
     }
+
+    // Set default selected values to first option
+    if (product.value.colors?.length) selectedColor.value = product.value.colors[0]
+    if (product.value.sizes?.length) selectedSize.value = product.value.sizes[0]
+    if (product.value.heights?.length) selectedHeight.value = product.value.heights[0]
+    if (product.value.weights?.length) selectedWeight.value = product.value.weights[0]
   } catch (err) {
     error.value = 'Failed to load product'
     console.error(err)
@@ -53,9 +60,10 @@ const fetchProduct = async () => {
 
 // Selected options
 const selectedImage = ref(0)
-const selectedColor = ref('white')
-const selectedSize = ref('Large')
-const selectedHeight = ref('100 cm')
+const selectedColor = ref()
+const selectedSize = ref()
+const selectedHeight = ref()
+const selectedWeight = ref()
 const quantity = ref(1)
 
 // Countdown timer
@@ -113,6 +121,7 @@ const handleAddToCart = () => {
     color: selectedColor.value,
     size: selectedSize.value,
     height: selectedHeight.value,
+    weight: selectedWeight.value,
     quantity: quantity.value
   })
 }
@@ -126,6 +135,7 @@ const handleBuyNow = () => {
     color: selectedColor.value,
     size: selectedSize.value,
     height: selectedHeight.value,
+    weight: selectedWeight.value,
     quantity: quantity.value
   })
   router.push('/checkout')
@@ -252,14 +262,13 @@ const handleShare = async () => {
           <div class="flex flex-wrap gap-2">
             <button
               v-for="color in product.colors"
-              :key="color.name"
-              @click="selectedColor = color.name"
+              :key="color"
+              @click="selectedColor = color"
               class="px-4 py-2.5 text-sm font-medium border-2 rounded-lg transition-all duration-200"
-              :class="selectedColor === color.name
-                ? 'bg-gray-900 text-white border-gray-900'
-                : 'bg-white text-gray-700 border-gray-200 hover:border-gray-900'"
-            >
-              {{ color.name }}
+              :class="selectedColor === color
+                ? 'bg-primary text-white border-gray-900'
+                : 'bg-white text-gray-700 border-gray-200 hover:border-gray-900'" >
+              {{ color }}
             </button>
           </div>
         </div>
@@ -273,7 +282,7 @@ const handleShare = async () => {
               @click="selectedSize = size"
               class="min-w-[50px] px-4 py-2.5 text-sm font-medium border-2 rounded-lg transition-all duration-200"
               :class="selectedSize === size
-                ? 'bg-gray-900 text-white border-gray-900'
+                ? 'bg-primary text-white border-gray-900'
                 : 'bg-white text-gray-700 border-gray-200 hover:border-gray-900'"
             >
               {{ size }}
@@ -291,10 +300,28 @@ const handleShare = async () => {
               @click="selectedHeight = height"
               class="px-4 py-2.5 text-sm font-medium border-2 rounded-lg transition-all duration-200"
               :class="selectedHeight === height
-                ? 'bg-gray-900 text-white border-gray-900'
+                ? 'bg-primary text-white border-gray-900'
                 : 'bg-white text-gray-700 border-gray-200 hover:border-gray-900'"
             >
               {{ height }}
+            </button>
+          </div>
+        </div>
+
+        <!-- Weight Options -->
+        <div v-if="product.weights?.length">
+          <p class="text-sm font-medium text-gray-900 mb-3">{{ t('product.weight') }}</p>
+          <div class="flex flex-wrap gap-2">
+            <button
+              v-for="weight in product.weights"
+              :key="weight"
+              @click="selectedWeight = weight"
+              class="px-4 py-2.5 text-sm font-medium border-2 rounded-lg transition-all duration-200"
+              :class="selectedWeight === weight
+                ? 'bg-primary text-white border-gray-900'
+                : 'bg-white text-gray-700 border-gray-200 hover:border-gray-900'"
+            >
+              {{ weight }}
             </button>
           </div>
         </div>
@@ -354,20 +381,12 @@ const handleShare = async () => {
         </div>
 
         <!-- Share Button -->
-        <div class="relative">
-          <button @click="handleShare" class="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900 transition-colors">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-            </svg>
-            {{ t('product.share') }}
-          </button>
-          <!-- Copy notification -->
-          <transition name="fade">
-            <span v-if="showShareNotification" class="absolute top-full mt-2 start-0 bg-gray-900 text-white text-xs px-3 py-1.5 rounded-lg whitespace-nowrap">
-              {{ t('product.linkCopied') }}
-            </span>
-          </transition>
-        </div>
+        <button class="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900 transition-colors">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+          </svg>
+          {{ t('product.share') }}
+        </button>
       </div>
     </div>
 
@@ -385,15 +404,3 @@ const handleShare = async () => {
     </section> -->
   </div>
 </template>
-
-<style scoped>
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.3s ease;
-}
-
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
-}
-</style>

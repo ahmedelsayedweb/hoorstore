@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\Product;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\File;
 
 class ProductController extends Controller
 {
@@ -44,6 +46,9 @@ class ProductController extends Controller
             'image' => 'nullable|string',
             'images' => 'nullable|array',
             'sizes' => 'nullable|array',
+            'colors' => 'nullable|array',
+            'heights' => 'nullable|array',
+            'weights' => 'nullable|array',
             'description' => 'nullable|string',
             'inStock' => 'nullable|boolean',
         ]);
@@ -56,6 +61,9 @@ class ProductController extends Controller
             'image' => $request->input('image', ''),
             'images' => $request->input('images', []),
             'sizes' => $request->input('sizes', []),
+            'colors' => $request->input('colors', []),
+            'heights' => $request->input('heights', []),
+            'weights' => $request->input('weights', []),
             'description' => $request->input('description', ''),
             'inStock' => $request->input('inStock', true),
         ]);
@@ -82,6 +90,9 @@ class ProductController extends Controller
             'image' => 'nullable|string',
             'images' => 'nullable|array',
             'sizes' => 'nullable|array',
+            'colors' => 'nullable|array',
+            'heights' => 'nullable|array',
+            'weights' => 'nullable|array',
             'description' => 'nullable|string',
             'inStock' => 'nullable|boolean',
         ]);
@@ -94,6 +105,9 @@ class ProductController extends Controller
             'image',
             'images',
             'sizes',
+            'colors',
+            'heights',
+            'weights',
             'description',
             'inStock',
         ]));
@@ -112,9 +126,44 @@ class ProductController extends Controller
             return response()->json(['error' => 'Product not found'], 404);
         }
 
+        // Delete main image
+        if ($product->image) {
+            $this->deleteImageFromUrl($product->image);
+        }
+
+        // Delete all additional images
+        if ($product->images && is_array($product->images)) {
+            foreach ($product->images as $imageUrl) {
+                $this->deleteImageFromUrl($imageUrl);
+            }
+        }
+
         $product->delete();
 
         return response()->json(['message' => 'Product deleted', 'product' => $product]);
+    }
+
+    /**
+     * Delete image file from URL
+     */
+    private function deleteImageFromUrl($url): bool
+    {
+        if (empty($url)) {
+            return false;
+        }
+
+        // Extract the path from URL (after /storage/)
+        $pattern = '/\/storage\/(.+)$/';
+        if (preg_match($pattern, $url, $matches)) {
+            $relativePath = $matches[1];
+            $fullPath = storage_path('app/public/' . $relativePath);
+
+            if (File::exists($fullPath)) {
+                return File::delete($fullPath);
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -132,9 +181,18 @@ class ProductController extends Controller
 
         $file = $request->file('image');
         $filename = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
-        $path = 'uploads/images';
 
-        $file->move(storage_path('app/public/' . $path), $filename);
+        // Organize images in folders by date (year/month/day)
+        $datePath = date('Y/m/d');
+        $path = 'uploads/images/' . $datePath;
+
+        // Create directory if it doesn't exist
+        $fullPath = storage_path('app/public/' . $path);
+        if (!File::isDirectory($fullPath)) {
+            File::makeDirectory($fullPath, 0755, true);
+        }
+
+        $file->move($fullPath, $filename);
 
         $baseUrl = $request->getSchemeAndHttpHost();
         $url = $baseUrl . '/storage/' . $path . '/' . $filename;
@@ -144,5 +202,24 @@ class ProductController extends Controller
             'filename' => $filename,
             'url' => $url,
         ], 201);
+    }
+
+    /**
+     * Delete a single image
+     */
+    public function deleteImage(Request $request): JsonResponse
+    {
+        $this->validate($request, [
+            'url' => 'required|string',
+        ]);
+
+        $url = $request->input('url');
+        $deleted = $this->deleteImageFromUrl($url);
+
+        if ($deleted) {
+            return response()->json(['message' => 'Image deleted successfully']);
+        }
+
+        return response()->json(['error' => 'Image not found or could not be deleted'], 404);
     }
 }
