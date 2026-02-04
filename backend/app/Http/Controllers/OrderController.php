@@ -79,6 +79,8 @@ class OrderController extends Controller
             'subtotal' => 'required|numeric|min:0',
             'shipping' => 'required|numeric|min:0',
             'total' => 'required|numeric|min:0',
+            'couponCode' => 'nullable|string',
+            'discountAmount' => 'nullable|numeric|min:0',
         ]);
 
         $delivery = $request->input('delivery');
@@ -96,6 +98,8 @@ class OrderController extends Controller
             'shipping_method' => $request->input('shippingMethod', 'standard'),
             'payment_method' => $request->input('paymentMethod', 'cod'),
             'billing_address' => $request->input('billingAddress', 'same'),
+            'coupon_code' => $request->input('couponCode'),
+            'discount_amount' => $request->input('discountAmount', 0),
             'subtotal' => $request->input('subtotal'),
             'shipping' => $request->input('shipping'),
             'total' => $request->input('total'),
@@ -110,7 +114,7 @@ class OrderController extends Controller
                 'price' => $item['price'],
                 'image' => $item['image'] ?? null,
                 'color' => $item['color'] ?? null,
-                'size' => $item['size'] ?? null,
+                'sizes' => $item['sizes'] ?? [],
                 'height' => $item['height'] ?? null,
                 'quantity' => $item['quantity'],
                 'added_at' => isset($item['addedAt']) ? $item['addedAt'] : Carbon::now(),
@@ -149,8 +153,9 @@ class OrderController extends Controller
         $itemsList = $order->items->map(function ($item, $index) {
             $itemTotal = $item->price * $item->quantity;
             $num = $index + 1;
+            $sizesText = is_array($item->sizes) ? implode(', ', $item->sizes) : $item->sizes;
             $text = "▫️ *{$num}. {$item->name}*\n";
-            $text .= "   📏 المقاس: {$item->size}\n";
+            $text .= "   📏 المقاس: {$sizesText}\n";
             $text .= "   🎨 اللون: {$item->color}\n";
             if ($item->height) {
                 $text .= "   📐 الطول: {$item->height}\n";
@@ -183,6 +188,10 @@ class OrderController extends Controller
         $message .= "━━━━━━━━━━━━━━━\n";
         $message .= "💰 *الإجمالي:*\n";
         $message .= "المنتجات: ج.م{$order->subtotal}\n";
+        if ($order->coupon_code && $order->discount_amount > 0) {
+            $message .= "🎟️ كود الخصم: {$order->coupon_code}\n";
+            $message .= "💸 الخصم: -ج.م{$order->discount_amount}\n";
+        }
         $message .= "الشحن: ج.م{$order->shipping}\n";
         $message .= "*المجموع: ج.م{$order->total}*\n\n";
         $message .= "💳 *طريقة الدفع:* " . ($order->payment_method === 'cod' ? 'الدفع عند الاستلام 💵' : $order->payment_method);
@@ -199,9 +208,10 @@ class OrderController extends Controller
                 \Log::info("Order item {$index}: image = " . ($item->image ?? 'NULL'));
                 if ($item->image) {
                     $num = $index + 1;
+                    $sizesText = is_array($item->sizes) ? implode(', ', $item->sizes) : $item->sizes;
                     $caption = "📷 *صورة المنتج {$num}*\n";
                     $caption .= "{$item->name}\n";
-                    $caption .= "اللون: {$item->color} | المقاس: {$item->size}";
+                    $caption .= "اللون: {$item->color} | المقاس: {$sizesText}";
                     if ($item->height) {
                         $caption .= " | الطول: {$item->height}";
                     }
@@ -378,9 +388,10 @@ class OrderController extends Controller
         $from = env('MAIL_FROM_ADDRESS', 'noreply@hoorstore.com');
 
         $itemsHtml = $order->items->map(function ($item) {
+            $sizesText = is_array($item->sizes) ? implode(', ', $item->sizes) : $item->sizes;
             return "<tr>
                 <td style='padding: 10px; border-bottom: 1px solid #eee;'>{$item->name}</td>
-                <td style='padding: 10px; border-bottom: 1px solid #eee;'>{$item->color} / {$item->size}</td>
+                <td style='padding: 10px; border-bottom: 1px solid #eee;'>{$item->color} / {$sizesText}</td>
                 <td style='padding: 10px; border-bottom: 1px solid #eee;'>{$item->quantity}</td>
                 <td style='padding: 10px; border-bottom: 1px solid #eee;'>ج.م{$item->price}</td>
             </tr>";
@@ -422,6 +433,10 @@ class OrderController extends Controller
 
                 <div style='margin-top: 20px; padding: 15px; background: #f9f9f9; border-radius: 5px;'>
                     <p><strong>المنتجات:</strong> ج.م{$order->subtotal}</p>
+                    " . ($order->coupon_code && $order->discount_amount > 0 ? "
+                    <p><strong>كود الخصم:</strong> {$order->coupon_code}</p>
+                    <p style='color: #16a34a;'><strong>الخصم:</strong> -ج.م{$order->discount_amount}</p>
+                    " : "") . "
                     <p><strong>الشحن:</strong> ج.م{$order->shipping}</p>
                     <p style='font-size: 18px;'><strong>المجموع: ج.م{$order->total}</strong></p>
                 </div>
@@ -520,7 +535,7 @@ class OrderController extends Controller
                     'price' => $item->price,
                     'image' => $item->image,
                     'color' => $item->color,
-                    'size' => $item->size,
+                    'sizes' => $item->sizes,
                     'height' => $item->height,
                     'quantity' => $item->quantity,
                     'addedAt' => $item->added_at ? $item->added_at->toISOString() : null,
@@ -528,6 +543,8 @@ class OrderController extends Controller
             }),
             'subtotal' => $order->subtotal,
             'shipping' => $order->shipping,
+            'couponCode' => $order->coupon_code,
+            'discountAmount' => $order->discount_amount ?? 0,
             'total' => $order->total,
             'status' => $order->status,
             'createdAt' => $order->created_at->toISOString(),

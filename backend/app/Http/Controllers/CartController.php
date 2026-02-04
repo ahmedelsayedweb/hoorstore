@@ -29,7 +29,7 @@ class CartController extends Controller
                 'price' => $item->price,
                 'image' => $item->image,
                 'color' => $item->color,
-                'size' => $item->size,
+                'sizes' => $item->sizes,
                 'height' => $item->height,
                 'quantity' => $item->quantity,
                 'addedAt' => $item->added_at ? $item->added_at->toISOString() : $item->created_at->toISOString(),
@@ -50,18 +50,22 @@ class CartController extends Controller
             'price' => 'required|numeric|min:0',
             'image' => 'nullable|string',
             'color' => 'nullable|string',
-            'size' => 'nullable|string',
+            'sizes' => 'nullable|array',
+            'sizes.*' => 'string',
             'height' => 'nullable|string',
             'quantity' => 'nullable|integer|min:1',
         ]);
 
         $cart = Cart::firstOrCreate(['browser_id' => $browserId]);
 
+        $sizes = $request->input('sizes', []);
+        $sizesJson = json_encode($sizes);
+
         // Check if item already exists with same options
         $existingItem = CartItem::where('cart_id', $cart->id)
             ->where('product_id', $request->input('productId'))
             ->where('color', $request->input('color'))
-            ->where('size', $request->input('size'))
+            ->whereRaw('JSON_CONTAINS(sizes, ?) AND JSON_CONTAINS(?, sizes)', [$sizesJson, $sizesJson])
             ->where('height', $request->input('height'))
             ->first();
 
@@ -76,7 +80,7 @@ class CartController extends Controller
                 'price' => $request->input('price'),
                 'image' => $request->input('image'),
                 'color' => $request->input('color'),
-                'size' => $request->input('size'),
+                'sizes' => $sizes,
                 'height' => $request->input('height'),
                 'quantity' => $request->input('quantity', 1),
                 'added_at' => Carbon::now(),
@@ -106,11 +110,17 @@ class CartController extends Controller
         $this->validate($request, [
             'quantity' => 'sometimes|integer|min:1',
             'color' => 'sometimes|string',
-            'size' => 'sometimes|string',
+            'sizes' => 'sometimes|array',
+            'sizes.*' => 'string',
             'height' => 'sometimes|string',
+            'image' => 'sometimes|string',
         ]);
 
-        $item->update($request->only(['quantity', 'color', 'size', 'height']));
+        $updateData = $request->only(['quantity', 'color', 'height', 'image']);
+        if ($request->has('sizes')) {
+            $updateData['sizes'] = $request->input('sizes');
+        }
+        $item->update($updateData);
 
         return response()->json([
             'id' => $item->id,
@@ -119,7 +129,7 @@ class CartController extends Controller
             'price' => $item->price,
             'image' => $item->image,
             'color' => $item->color,
-            'size' => $item->size,
+            'sizes' => $item->sizes,
             'height' => $item->height,
             'quantity' => $item->quantity,
             'addedAt' => $item->added_at ? $item->added_at->toISOString() : $item->created_at->toISOString(),

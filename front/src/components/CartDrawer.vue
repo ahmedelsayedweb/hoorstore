@@ -65,7 +65,7 @@ const { cartItems, isCartOpen, closeCart, removeFromCart, updateQuantity, cartTo
             <div class="flex-1 min-w-0">
               <h3 class="text-sm font-medium text-gray-900 truncate">{{ item.name }}</h3>
               <p class="text-sm text-gray-500 mt-1">
-                {{ item.color }} / {{ item.size }} / {{ item.height }}
+                {{ item.color }} / {{ Array.isArray(item.sizes) ? item.sizes.join(', ') : item.sizes }} / {{ item.height }}
               </p>
               <p class="text-sm font-medium text-gray-900 mt-1">{{ t('common.egp') }} {{ item.price.toFixed(2) }}</p>
 

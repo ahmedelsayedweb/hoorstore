@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useCart } from '../composables/useCart'
-import { ordersApi, shippingApi } from '../api/cart'
+import { ordersApi, shippingApi, couponsApi } from '../api/cart'
 import { productsApi } from '../api/products'
 
 const ORDERS_STORAGE_KEY = 'hoor_orders'
@@ -14,29 +14,67 @@ const { cartItems, cartTotal, clearCart, updateCartItem, removeFromCart } = useC
 // Edit item modal state
 const editingItem = ref(null)
 const editForm = ref({
-  size: '',
+  sizes: [],
   height: '',
   weight: '',
+  color: '',
+  image: '',
   quantity: 1
 })
+
+// Toggle size selection in edit form
+const toggleEditSize = (size) => {
+  const index = editForm.value.sizes.indexOf(size)
+  if (index === -1) {
+    editForm.value.sizes.push(size)
+  } else {
+    editForm.value.sizes.splice(index, 1)
+  }
+}
 const loadingProduct = ref(false)
 
-// Available sizes, heights and weights from product
+// Available sizes, heights, weights and colors from product
 const availableSizes = ref([])
 const availableHeights = ref([])
 const availableWeights = ref([])
+const availableColors = ref([])
+
+// Helper to get color name (supports both string and object format)
+const getColorName = (color) => {
+  return typeof color === 'object' ? color.name : color
+}
+
+// Helper to get color image (supports both string and object format)
+const getColorImage = (color) => {
+  return typeof color === 'object' ? color.image : null
+}
+
+// Handle color change in edit form
+const onColorChange = (colorName) => {
+  editForm.value.color = colorName
+  // Find the color object and update the image
+  const colorObj = availableColors.value.find(c => getColorName(c) === colorName)
+  if (colorObj) {
+    const colorImage = getColorImage(colorObj)
+    if (colorImage) {
+      editForm.value.image = colorImage
+    }
+  }
+}
 
 // Open edit modal and fetch product details
 const openEditModal = async (item) => {
   editingItem.value = item
   editForm.value = {
-    size: item.size || '',
+    sizes: Array.isArray(item.sizes) ? [...item.sizes] : (item.sizes ? [item.sizes] : []),
     height: item.height || '',
     weight: item.weight || '',
+    color: item.color || '',
+    image: item.image || '',
     quantity: item.quantity
   }
 
-  // Fetch product to get available sizes, heights and weights
+  // Fetch product to get available sizes, heights, weights and colors
   if (item.productId) {
     loadingProduct.value = true
     try {
@@ -44,11 +82,13 @@ const openEditModal = async (item) => {
       availableSizes.value = product.sizes || []
       availableHeights.value = product.heights || []
       availableWeights.value = product.weights || []
+      availableColors.value = product.colors || []
     } catch (error) {
       console.error('Failed to load product:', error)
       availableSizes.value = []
       availableHeights.value = []
       availableWeights.value = []
+      availableColors.value = []
     } finally {
       loadingProduct.value = false
     }
@@ -64,9 +104,11 @@ const closeEditModal = () => {
 const saveEditedItem = async () => {
   if (editingItem.value) {
     await updateCartItem(editingItem.value.id, {
-      size: editForm.value.size,
+      sizes: editForm.value.sizes,
       height: editForm.value.height,
       weight: editForm.value.weight,
+      color: editForm.value.color,
+      image: editForm.value.image,
       quantity: editForm.value.quantity
     })
     closeEditModal()
@@ -120,6 +162,56 @@ const shippingZones = ref([])
 const shippingCost = ref(75)
 const deliveryTime = ref('24')
 const loadingShipping = ref(false)
+
+// Coupon state
+const couponCode = ref('')
+const appliedCoupon = ref(null)
+const couponLoading = ref(false)
+const couponError = ref('')
+const couponSuccess = ref('')
+
+// Apply coupon
+const applyCoupon = async () => {
+  if (!couponCode.value.trim()) {
+    couponError.value = locale.value === 'ar' ? 'أدخل كود الخصم' : 'Enter coupon code'
+    return
+  }
+
+  couponLoading.value = true
+  couponError.value = ''
+  couponSuccess.value = ''
+
+  try {
+    const result = await couponsApi.validate(couponCode.value, subtotal.value)
+
+    if (result.success) {
+      appliedCoupon.value = result.coupon
+      couponSuccess.value = result.message
+      couponError.value = ''
+    } else {
+      couponError.value = result.message
+      appliedCoupon.value = null
+    }
+  } catch (err) {
+    couponError.value = locale.value === 'ar' ? 'حدث خطأ' : 'An error occurred'
+    appliedCoupon.value = null
+  } finally {
+    couponLoading.value = false
+  }
+}
+
+// Remove coupon
+const removeCoupon = () => {
+  appliedCoupon.value = null
+  couponCode.value = ''
+  couponSuccess.value = ''
+  couponError.value = ''
+}
+
+// Discount amount
+const discountAmount = computed(() => {
+  return appliedCoupon.value ? appliedCoupon.value.discount : 0
+})
 
 // Governorate mapping for shipping calculation
 const governorateMap = {
@@ -260,7 +352,7 @@ const clearFieldError = (field) => {
 // Computed values
 const subtotal = computed(() => cartTotal.value)
 const tax = computed(() => Math.round(subtotal.value * 0.14))
-const total = computed(() => subtotal.value + shippingCost.value)
+const total = computed(() => subtotal.value + shippingCost.value - discountAmount.value)
 
 // Form validation
 const isFormValid = computed(() => {
@@ -279,7 +371,8 @@ const takeScreenshot = async () => {
     const baseHeight = 520
     const itemHeight = 80
     const notesHeight = notes.value ? 60 : 0
-    const totalHeight = baseHeight + (cartItems.value.length * itemHeight) + notesHeight
+    const discountHeight = appliedCoupon.value ? 25 : 0
+    const totalHeight = baseHeight + (cartItems.value.length * itemHeight) + notesHeight + discountHeight
 
     canvas.width = 600
     canvas.height = Math.max(700, totalHeight)
@@ -524,11 +617,12 @@ const takeScreenshot = async () => {
 
       y += 20
 
-      // Item details (color, size, height, weight)
+      // Item details (color, sizes, height, weight)
       ctx.fillStyle = '#6b7280'
       ctx.font = '13px Arial, sans-serif'
       ctx.textAlign = getAlign('left')
-      const details = [item.color, item.size, item.height, item.weight].filter(Boolean).join(' | ')
+      const sizesStr = Array.isArray(item.sizes) ? item.sizes.join(', ') : item.sizes
+      const details = [item.color, sizesStr, item.height, item.weight].filter(Boolean).join(' | ')
       ctx.fillText(details, getX(padding + 10, width - padding - 10), y)
 
       y += 18
@@ -542,13 +636,14 @@ const takeScreenshot = async () => {
 
     y += 10
 
-    // Totals Section with background
+    // Totals Section with background (height depends on discount)
+    const totalsHeight = appliedCoupon.value ? 125 : 100
     ctx.fillStyle = '#f9fafb'
-    ctx.fillRect(padding, y, contentWidth, 100)
+    ctx.fillRect(padding, y, contentWidth, totalsHeight)
 
     // Border for totals
     ctx.strokeStyle = '#e5e5e5'
-    ctx.strokeRect(padding, y, contentWidth, 100)
+    ctx.strokeRect(padding, y, contentWidth, totalsHeight)
 
     y += 25
 
@@ -583,6 +678,24 @@ const takeScreenshot = async () => {
       getX(width - padding - 15, padding + 15),
       y
     )
+
+    // Discount (if coupon applied)
+    if (appliedCoupon.value && discountAmount.value > 0) {
+      y += 22
+      ctx.fillStyle = '#16a34a'
+      ctx.textAlign = getAlign('left')
+      ctx.fillText(
+        isArabic ? `خصم (${appliedCoupon.value.code})` : `Discount (${appliedCoupon.value.code})`,
+        getX(padding + 15, width - padding - 15),
+        y
+      )
+      ctx.textAlign = getAlign('right')
+      ctx.fillText(
+        `-${discountAmount.value.toFixed(2)} ${currencySymbol.value}`,
+        getX(width - padding - 15, padding + 15),
+        y
+      )
+    }
 
     y += 28
 
@@ -708,6 +821,8 @@ const submitOrder = async () => {
       items: cartItems.value,
       subtotal: subtotal.value,
       shipping: shippingCost.value,
+      couponCode: appliedCoupon.value?.code || null,
+      discountAmount: discountAmount.value,
       total: total.value
     }
 
@@ -831,10 +946,10 @@ const continueShopping = () => {
         </div>
 
         <div class="flex gap-4 mb-4">
-          <img :src="editingItem.image" :alt="editingItem.name" class="w-20 h-24 object-cover rounded" />
+          <img :src="editForm.image || editingItem.image" :alt="editingItem.name" class="w-20 h-24 object-cover rounded" />
           <div>
             <h4 class="font-medium text-gray-900">{{ editingItem.name }}</h4>
-            <p class="text-sm text-gray-500">{{ editingItem.color }}</p>
+            <p class="text-sm text-gray-500">{{ editForm.color }}</p>
             <p class="text-sm font-medium text-primary">{{ editingItem.price }} {{ $t('common.egp') }}</p>
           </div>
         </div>
@@ -848,15 +963,35 @@ const continueShopping = () => {
         </div>
 
         <div v-else class="space-y-4">
-          <!-- Size -->
-          <div v-if="availableSizes.length > 0">
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('product.size') }}</label>
+          <!-- Color -->
+          <div v-if="availableColors.length > 0">
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('product.color') }}</label>
             <select
-              v-model="editForm.size"
+              :value="editForm.color"
+              @change="onColorChange($event.target.value)"
               class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-primary"
             >
-              <option v-for="size in availableSizes" :key="size" :value="size">{{ size }}</option>
+              <option v-for="color in availableColors" :key="getColorName(color)" :value="getColorName(color)">{{ getColorName(color) }}</option>
             </select>
+          </div>
+
+          <!-- Size (Multiple Selection) -->
+          <div v-if="availableSizes.length > 0">
+            <label class="block text-sm font-medium text-gray-700 mb-2">{{ $t('product.size') }}</label>
+            <div class="flex flex-wrap gap-2">
+              <button
+                v-for="size in availableSizes"
+                :key="size"
+                type="button"
+                @click="toggleEditSize(size)"
+                class="min-w-[40px] px-3 py-2 text-sm font-medium border-2 rounded-lg transition-all duration-200"
+                :class="editForm.sizes.includes(size)
+                  ? 'bg-primary text-white border-primary'
+                  : 'bg-white text-gray-700 border-gray-200 hover:border-gray-400'"
+              >
+                {{ size }}
+              </button>
+            </div>
           </div>
 
           <!-- Height -->
@@ -1107,6 +1242,78 @@ const continueShopping = () => {
             </div>
           </section>
 
+          <!-- Coupon Section -->
+          <section>
+            <h2 class="text-xl font-medium text-gray-900 mb-4">{{ $t('checkout.coupon') }}</h2>
+            <div class="space-y-3">
+              <!-- Applied Coupon -->
+              <div v-if="appliedCoupon" class="flex items-center justify-between p-4 bg-green-50 border border-green-200 rounded-lg">
+                <div class="flex items-center gap-3">
+                  <div class="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                    <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p class="font-medium text-green-800">{{ appliedCoupon.code }}</p>
+                    <p class="text-sm text-green-600">
+                      {{ appliedCoupon.type === 'percentage' ? `${appliedCoupon.value}%` : `${appliedCoupon.value} ${$t('common.egp')}` }}
+                      {{ $t('checkout.discount') }}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  @click="removeCoupon"
+                  class="text-red-500 hover:text-red-700 p-2"
+                >
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <!-- Coupon Input -->
+              <div v-else class="flex gap-2">
+                <input
+                  v-model="couponCode"
+                  type="text"
+                  :placeholder="$t('checkout.couponPlaceholder')"
+                  class="flex-1 px-4 py-3 border border-gray-300 rounded focus:outline-none focus:border-primary uppercase"
+                  @keyup.enter="applyCoupon"
+                />
+                <button
+                  @click="applyCoupon"
+                  :disabled="couponLoading"
+                  class="px-6 py-3 bg-primary text-white rounded font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+                >
+                  <span v-if="couponLoading" class="flex items-center gap-2">
+                    <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                    </svg>
+                  </span>
+                  <span v-else>{{ $t('checkout.apply') }}</span>
+                </button>
+              </div>
+
+              <!-- Coupon Error -->
+              <p v-if="couponError" class="text-sm text-red-500 flex items-center gap-1">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                {{ couponError }}
+              </p>
+
+              <!-- Coupon Success -->
+              <p v-if="couponSuccess && appliedCoupon" class="text-sm text-green-600 flex items-center gap-1">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                </svg>
+                {{ couponSuccess }}
+              </p>
+            </div>
+          </section>
+
           <!-- Payment Section -->
           <section>
             <h2 class="text-xl font-medium text-gray-900 mb-2">{{ $t('checkout.payment') }}</h2>
@@ -1200,7 +1407,7 @@ const continueShopping = () => {
                 </div>
                 <div class="flex-1 min-w-0">
                   <h3 class="text-sm font-medium text-gray-900 truncate">{{ item.name }}</h3>
-                  <p class="text-xs text-gray-500">{{ [item.color, item.size, item.height, item.weight].filter(Boolean).join(' / ') }}</p>
+                  <p class="text-xs text-gray-500">{{ [item.color, Array.isArray(item.sizes) ? item.sizes.join(', ') : item.sizes, item.height, item.weight].filter(Boolean).join(' / ') }}</p>
                   <p class="text-sm font-medium text-gray-900 mt-1">{{ (item.price * item.quantity).toFixed(2) }} {{ $t('common.egp') }}</p>
                   <!-- Edit/Delete Buttons -->
                   <div class="flex gap-2 mt-2">
@@ -1241,6 +1448,13 @@ const continueShopping = () => {
                   </svg>
                 </span>
                 <span class="text-gray-900">{{ Number(shippingCost).toFixed(2) }} {{ $t('common.egp') }}</span>
+              </div>
+              <!-- Discount Row -->
+              <div v-if="appliedCoupon" class="flex justify-between text-sm">
+                <span class="text-green-600 flex items-center gap-1">
+                  {{ $t('checkout.discount') }} ({{ appliedCoupon.code }})
+                </span>
+                <span class="text-green-600">-{{ discountAmount.toFixed(2) }} {{ $t('common.egp') }}</span>
               </div>
               <div class="flex justify-between items-center pt-3 border-t border-gray-200">
                 <span class="text-lg font-medium text-gray-900">{{ $t('checkout.totalAmount') }}</span>

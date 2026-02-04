@@ -111,6 +111,10 @@
     "notes": "Notes",
     "notesPlaceholder": "Order notes (optional)",
     "editItem": "Edit Item",
+    "coupon": "Discount Code",
+    "couponPlaceholder": "Enter discount code",
+    "apply": "Apply",
+    "discount": "Discount",
     "governorates": {
       "cairo": "Cairo",
       "giza": "Giza",
@@ -208,5 +212,11 @@
   "about": {
     "title": "About Hoor Store",
     "description": "At Hoor Store, fashion meets fun for the whole family! Discover trendy outfits for kids, men, and woman, crafted for comfort, style, and everyday confidence. Shop your favorites and enjoy a shopping experience made just for you!"
+  },
+  "notFound": {
+    "title": "Page Not Found",
+    "message": "Sorry, the page you're looking for doesn't exist or has been moved.",
+    "goHome": "Go to Homepage",
+    "goBack": "Go Back"
   }
 }

@@ -268,11 +268,5 @@ onMounted(async () => {
         />
       </div>
     </div>
-
-    <!-- About Section -->
-    <AboutSection />
-
-    <!-- Footer -->
-    <SiteFooter />
   </div>
 </template>

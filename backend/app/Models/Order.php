@@ -19,6 +19,8 @@ class Order extends Model
         'shipping_method',
         'payment_method',
         'billing_address',
+        'coupon_code',
+        'discount_amount',
         'subtotal',
         'shipping',
         'total',
@@ -29,6 +31,7 @@ class Order extends Model
         'subtotal' => 'float',
         'shipping' => 'float',
         'total' => 'float',
+        'discount_amount' => 'float',
     ];
 
     public function items()

@@ -47,4 +47,11 @@ $router->group(['prefix' => 'api'], function () use ($router) {
     $router->get('shipping/governorates', 'ShippingController@index');
     $router->get('shipping/zones', 'ShippingController@zones');
     $router->post('shipping/price', 'ShippingController@getPrice');
+
+    // Coupons
+    $router->post('coupons/validate', 'CouponController@validateCoupon');
+    $router->get('coupons', 'CouponController@index');
+    $router->post('coupons', 'CouponController@store');
+    $router->put('coupons/{id}', 'CouponController@update');
+    $router->delete('coupons/{id}', 'CouponController@destroy');
 });

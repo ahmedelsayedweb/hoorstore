@@ -1,4 +1,4 @@
-const API_URL = 'http://localhost:8000/api'
+const API_URL = import.meta.env.VITE_API_URL
 
 // Get or generate browser ID for cart identification
 function getBrowserId() {
@@ -140,6 +140,53 @@ export const shippingApi = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ governorate })
+    })
+    return res.json()
+  }
+}
+
+// Coupons API
+export const couponsApi = {
+  // Validate coupon code
+  async validate(code, subtotal) {
+    const res = await fetch(`${API_URL}/coupons/validate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code, subtotal })
+    })
+    return res.json()
+  },
+
+  // Get all coupons (admin)
+  async getAll() {
+    const res = await fetch(`${API_URL}/coupons`)
+    return res.json()
+  },
+
+  // Create new coupon (admin)
+  async create(couponData) {
+    const res = await fetch(`${API_URL}/coupons`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(couponData)
+    })
+    return res.json()
+  },
+
+  // Update coupon (admin)
+  async update(id, couponData) {
+    const res = await fetch(`${API_URL}/coupons/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(couponData)
+    })
+    return res.json()
+  },
+
+  // Delete coupon (admin)
+  async delete(id) {
+    const res = await fetch(`${API_URL}/coupons/${id}`, {
+      method: 'DELETE'
     })
     return res.json()
   }

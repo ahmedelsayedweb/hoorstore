@@ -17,13 +17,20 @@ async function loadCart() {
 // Initialize cart
 loadCart()
 
+// Helper to compare arrays
+const arraysEqual = (a, b) => {
+  if (!Array.isArray(a) || !Array.isArray(b)) return a === b
+  if (a.length !== b.length) return false
+  return a.every((val, idx) => val === b[idx])
+}
+
 export function useCart() {
   const addToCart = async (product) => {
     const existingItem = cartItems.value.find(
       item =>
         item.productId === product.id &&
         item.color === product.color &&
-        item.size === product.size &&
+        arraysEqual(item.sizes, product.sizes) &&
         item.height === product.height
     )
 
@@ -39,7 +46,7 @@ export function useCart() {
         price: product.price,
         image: product.image,
         color: product.color,
-        size: product.size,
+        sizes: product.sizes,
         height: product.height,
         quantity: product.quantity
       }

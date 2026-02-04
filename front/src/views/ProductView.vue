@@ -46,8 +46,10 @@ const fetchProduct = async () => {
     }
 
     // Set default selected values to first option
-    if (product.value.colors?.length) selectedColor.value = product.value.colors[0]
-    if (product.value.sizes?.length) selectedSize.value = product.value.sizes[0]
+    if (product.value.colors?.length) {
+      selectColor(product.value.colors[0])
+    }
+    if (product.value.sizes?.length) selectedSizes.value = [product.value.sizes[0]]
     if (product.value.heights?.length) selectedHeight.value = product.value.heights[0]
     if (product.value.weights?.length) selectedWeight.value = product.value.weights[0]
   } catch (err) {
@@ -61,10 +63,42 @@ const fetchProduct = async () => {
 // Selected options
 const selectedImage = ref(0)
 const selectedColor = ref()
-const selectedSize = ref()
+const selectedColorImage = ref(null)
+const selectedSizes = ref([])
 const selectedHeight = ref()
 const selectedWeight = ref()
 const quantity = ref(1)
+
+// Toggle size selection (allow multiple)
+const toggleSize = (size) => {
+  const index = selectedSizes.value.indexOf(size)
+  if (index === -1) {
+    selectedSizes.value.push(size)
+  } else {
+    selectedSizes.value.splice(index, 1)
+  }
+}
+
+// Helper to get color name (supports both string and object format)
+const getColorName = (color) => {
+  return typeof color === 'object' ? color.name : color
+}
+
+// Helper to get color image (supports both string and object format)
+const getColorImage = (color) => {
+  return typeof color === 'object' ? color.image : null
+}
+
+// Handle color selection
+const selectColor = (color) => {
+  selectedColor.value = color
+  const colorImage = getColorImage(color)
+  if (colorImage) {
+    selectedColorImage.value = colorImage
+  } else {
+    selectedColorImage.value = null
+  }
+}
 
 // Countdown timer
 const countdown = ref({
@@ -113,13 +147,16 @@ const increaseQuantity = () => {
 }
 
 const handleAddToCart = () => {
+  // Get the correct image - color image if available, otherwise default
+  const cartImage = selectedColorImage.value || product.value.images?.[0] || product.value.image
+
   addToCart({
     id: product.value.id,
     name: product.value.name,
     price: product.value.salePrice,
-    image: product.value.images?.[0] || product.value.image,
-    color: selectedColor.value,
-    size: selectedSize.value,
+    image: cartImage,
+    color: getColorName(selectedColor.value),
+    sizes: selectedSizes.value,
     height: selectedHeight.value,
     weight: selectedWeight.value,
     quantity: quantity.value
@@ -127,13 +164,16 @@ const handleAddToCart = () => {
 }
 
 const handleBuyNow = () => {
+  // Get the correct image - color image if available, otherwise default
+  const cartImage = selectedColorImage.value || product.value.images?.[0] || product.value.image
+
   addToCart({
     id: product.value.id,
     name: product.value.name,
     price: product.value.salePrice,
-    image: product.value.images?.[0] || product.value.image,
-    color: selectedColor.value,
-    size: selectedSize.value,
+    image: cartImage,
+    color: getColorName(selectedColor.value),
+    sizes: selectedSizes.value,
     height: selectedHeight.value,
     weight: selectedWeight.value,
     quantity: quantity.value
@@ -183,7 +223,7 @@ const handleShare = async () => {
         <!-- Main Image -->
         <div class="aspect-[3/4] bg-gray-50 overflow-hidden rounded-lg">
           <img
-            :src="product.images?.[selectedImage] || product.image"
+            :src="selectedColorImage || product.images?.[selectedImage] || product.image"
             :alt="product.name"
             class="w-full h-full object-cover hover:scale-105 transition-transform duration-500"
           />
@@ -262,26 +302,26 @@ const handleShare = async () => {
           <div class="flex flex-wrap gap-2">
             <button
               v-for="color in product.colors"
-              :key="color"
-              @click="selectedColor = color"
+              :key="getColorName(color)"
+              @click="selectColor(color)"
               class="px-4 py-2.5 text-sm font-medium border-2 rounded-lg transition-all duration-200"
-              :class="selectedColor === color
+              :class="getColorName(selectedColor) === getColorName(color)
                 ? 'bg-primary text-white border-gray-900'
                 : 'bg-white text-gray-700 border-gray-200 hover:border-gray-900'" >
-              {{ color }}
+              {{ getColorName(color) }}
             </button>
           </div>
         </div>
-        <!-- Size Options -->
+        <!-- Size Options (Multiple Selection) -->
         <div v-if="product.sizes?.length">
           <p class="text-sm font-medium text-gray-900 mb-3">{{ t('product.size') }}</p>
           <div class="flex flex-wrap gap-2">
             <button
               v-for="size in product.sizes"
               :key="size"
-              @click="selectedSize = size"
+              @click="toggleSize(size)"
               class="min-w-[50px] px-4 py-2.5 text-sm font-medium border-2 rounded-lg transition-all duration-200"
-              :class="selectedSize === size
+              :class="selectedSizes.includes(size)
                 ? 'bg-primary text-white border-gray-900'
                 : 'bg-white text-gray-700 border-gray-200 hover:border-gray-900'"
             >
@@ -381,12 +421,23 @@ const handleShare = async () => {
         </div>
 
         <!-- Share Button -->
-        <button class="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900 transition-colors">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-          </svg>
-          {{ t('product.share') }}
-        </button>
+        <div class="relative">
+          <button @click="handleShare" class="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900 transition-colors">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+            </svg>
+            {{ t('product.share') }}
+          </button>
+          <!-- Copy notification -->
+          <Transition name="fade">
+            <div
+              v-if="showShareNotification"
+              class="absolute bottom-full mb-2 ltr:left-0 rtl:right-0 bg-green-600 text-white text-xs px-3 py-2 rounded-lg shadow-lg whitespace-nowrap"
+            >
+              {{ t('product.linkCopied') }}
+            </div>
+          </Transition>
+        </div>
       </div>
     </div>
 
@@ -404,3 +455,15 @@ const handleShare = async () => {
     </section> -->
   </div>
 </template>
+
+<style scoped>
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+</style>

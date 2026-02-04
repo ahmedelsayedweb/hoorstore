@@ -10,25 +10,61 @@ const { cartItems, removeFromCart, updateQuantity, updateCartItem, cartTotal } =
 // Edit item modal state
 const editingItem = ref(null)
 const editForm = ref({
-  size: '',
+  sizes: [],
   height: '',
   color: '',
+  image: '',
   quantity: 1
 })
+
+// Toggle size selection in edit form
+const toggleEditSize = (size) => {
+  const index = editForm.value.sizes.indexOf(size)
+  if (index === -1) {
+    editForm.value.sizes.push(size)
+  } else {
+    editForm.value.sizes.splice(index, 1)
+  }
+}
 const loadingProduct = ref(false)
+const currentProduct = ref(null)
 
 // Available options from product
 const availableSizes = ref([])
 const availableHeights = ref([])
 const availableColors = ref([])
 
+// Helper to get color name (supports both string and object format)
+const getColorName = (color) => {
+  return typeof color === 'object' ? color.name : color
+}
+
+// Helper to get color image (supports both string and object format)
+const getColorImage = (color) => {
+  return typeof color === 'object' ? color.image : null
+}
+
+// Handle color change in edit form
+const onColorChange = (colorName) => {
+  editForm.value.color = colorName
+  // Find the color object and update the image
+  const colorObj = availableColors.value.find(c => getColorName(c) === colorName)
+  if (colorObj) {
+    const colorImage = getColorImage(colorObj)
+    if (colorImage) {
+      editForm.value.image = colorImage
+    }
+  }
+}
+
 // Open edit modal and fetch product details
 const openEditModal = async (item) => {
   editingItem.value = item
   editForm.value = {
-    size: item.size || '',
+    sizes: Array.isArray(item.sizes) ? [...item.sizes] : (item.sizes ? [item.sizes] : []),
     height: item.height || '',
     color: item.color || '',
+    image: item.image || '',
     quantity: item.quantity
   }
 
@@ -37,11 +73,13 @@ const openEditModal = async (item) => {
     loadingProduct.value = true
     try {
       const product = await productsApi.getById(item.productId)
+      currentProduct.value = product
       availableSizes.value = product.sizes || []
       availableHeights.value = product.heights || []
       availableColors.value = product.colors || []
     } catch (error) {
       console.error('Failed to load product:', error)
+      currentProduct.value = null
       availableSizes.value = []
       availableHeights.value = []
       availableColors.value = []
@@ -60,9 +98,10 @@ const closeEditModal = () => {
 const saveEditedItem = async () => {
   if (editingItem.value) {
     await updateCartItem(editingItem.value.id, {
-      size: editForm.value.size,
+      sizes: editForm.value.sizes,
       height: editForm.value.height,
       color: editForm.value.color,
+      image: editForm.value.image,
       quantity: editForm.value.quantity
     })
     closeEditModal()
@@ -84,10 +123,10 @@ const saveEditedItem = async () => {
       </div>
 
       <div class="flex gap-4 mb-4">
-        <img :src="editingItem.image" :alt="editingItem.name" class="w-20 h-24 object-cover rounded" />
+        <img :src="editForm.image || editingItem.image" :alt="editingItem.name" class="w-20 h-24 object-cover rounded" />
         <div>
           <h4 class="font-medium text-gray-900">{{ editingItem.name }}</h4>
-          <p class="text-sm text-gray-500">{{ editingItem.color }}</p>
+          <p class="text-sm text-gray-500">{{ editForm.color }}</p>
           <p class="text-sm font-medium text-primary">{{ editingItem.price }} {{ t('common.egp') }}</p>
         </div>
       </div>
@@ -105,22 +144,31 @@ const saveEditedItem = async () => {
         <div v-if="availableColors.length > 0">
           <label class="block text-sm font-medium text-gray-700 mb-1">{{ t('product.color') }}</label>
           <select
-            v-model="editForm.color"
+            :value="editForm.color"
+            @change="onColorChange($event.target.value)"
             class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-primary"
           >
-            <option v-for="color in availableColors" :key="color" :value="color">{{ color }}</option>
+            <option v-for="color in availableColors" :key="getColorName(color)" :value="getColorName(color)">{{ getColorName(color) }}</option>
           </select>
         </div>
 
-        <!-- Size -->
+        <!-- Size (Multiple Selection) -->
         <div v-if="availableSizes.length > 0">
-          <label class="block text-sm font-medium text-gray-700 mb-1">{{ t('product.size') }}</label>
-          <select
-            v-model="editForm.size"
-            class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-primary"
-          >
-            <option v-for="size in availableSizes" :key="size" :value="size">{{ size }}</option>
-          </select>
+          <label class="block text-sm font-medium text-gray-700 mb-2">{{ t('product.size') }}</label>
+          <div class="flex flex-wrap gap-2">
+            <button
+              v-for="size in availableSizes"
+              :key="size"
+              type="button"
+              @click="toggleEditSize(size)"
+              class="min-w-[40px] px-3 py-2 text-sm font-medium border-2 rounded-lg transition-all duration-200"
+              :class="editForm.sizes.includes(size)
+                ? 'bg-primary text-white border-primary'
+                : 'bg-white text-gray-700 border-gray-200 hover:border-gray-400'"
+            >
+              {{ size }}
+            </button>
+          </div>
         </div>
 
         <!-- Height -->
@@ -232,7 +280,7 @@ const saveEditedItem = async () => {
               <p class="text-sm text-gray-500 mt-1">{{ t('common.egp') }} {{ item.price.toFixed(2) }}</p>
               <div class="mt-2 space-y-0.5 text-sm text-gray-500">
                 <p>{{ t('product.color') }}: {{ item.color }}</p>
-                <p>{{ t('product.size') }}: {{ item.size }}</p>
+                <p>{{ t('product.size') }}: {{ Array.isArray(item.sizes) ? item.sizes.join(', ') : item.sizes }}</p>
                 <p>{{ t('product.height') }}: {{ item.height }}</p>
               </div>
             </div>

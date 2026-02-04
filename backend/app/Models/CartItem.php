@@ -13,7 +13,7 @@ class CartItem extends Model
         'price',
         'image',
         'color',
-        'size',
+        'sizes',
         'height',
         'quantity',
         'added_at',
@@ -23,6 +23,7 @@ class CartItem extends Model
         'price' => 'float',
         'quantity' => 'integer',
         'added_at' => 'datetime',
+        'sizes' => 'array',
     ];
 
     public function cart()
