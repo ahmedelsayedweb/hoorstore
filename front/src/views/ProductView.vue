@@ -159,7 +159,9 @@ const handleAddToCart = () => {
     sizes: selectedSizes.value,
     height: selectedHeight.value,
     weight: selectedWeight.value,
-    quantity: quantity.value
+    quantity: quantity.value,
+    hasSizesAvailable: product.value.sizes?.length > 0,
+    hasColorsAvailable: product.value.colors?.length > 0
   })
 }
 
@@ -176,7 +178,9 @@ const handleBuyNow = () => {
     sizes: selectedSizes.value,
     height: selectedHeight.value,
     weight: selectedWeight.value,
-    quantity: quantity.value
+    quantity: quantity.value,
+    hasSizesAvailable: product.value.sizes?.length > 0,
+    hasColorsAvailable: product.value.colors?.length > 0
   })
   router.push('/checkout')
 }
@@ -256,7 +260,7 @@ const handleShare = async () => {
           <span v-if="product.isOnSale" class="text-lg text-gray-400 line-through">
             {{ t('common.egp') }} {{ Number(product.originalPrice || 0).toFixed(2) }}
           </span>
-          <span v-if="product.isOnSale" class="bg-red-500 text-white text-xs px-3 py-1 rounded-full">{{ t('product.sale') }}</span>
+          <span v-if="product.isOnSale" class="bg-primary text-white text-xs px-3 py-1 rounded-full">{{ t('product.sale') }}</span>
         </div>
 
         <!-- <p class="text-sm text-gray-500">Taxes included. <a href="#" class="underline">Shipping</a> calculated at checkout.</p> -->

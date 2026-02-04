@@ -360,26 +360,16 @@ const isFormValid = computed(() => {
     delivery.value.phone
 })
 
-// Generate order image using canvas with proper Arabic/English support
+// Generate order image using canvas with proper Arabic/English support (multi-page)
 const takeScreenshot = async () => {
   try {
-    const canvas = document.createElement('canvas')
-    const ctx = canvas.getContext('2d')
     const isArabic = locale.value === 'ar'
-
-    // Calculate dynamic height based on items
-    const baseHeight = 520
-    const itemHeight = 80
-    const notesHeight = notes.value ? 60 : 0
-    const discountHeight = appliedCoupon.value ? 25 : 0
-    const totalHeight = baseHeight + (cartItems.value.length * itemHeight) + notesHeight + discountHeight
-
-    canvas.width = 600
-    canvas.height = Math.max(700, totalHeight)
-
-    const width = canvas.width
+    const width = 600
     const padding = 30
     const contentWidth = width - (padding * 2)
+    const maxPageHeight = 850 // Max height per page
+    const itemHeight = 80
+    const itemsPerPage = 4 // Items per page after first page
 
     // Helper for RTL text positioning
     const getX = (leftPos, rightPos) => isArabic ? rightPos : leftPos
@@ -389,58 +379,422 @@ const takeScreenshot = async () => {
       return ltrAlign
     }
 
-    // White background with subtle border
-    ctx.fillStyle = '#ffffff'
+    // Calculate number of pages needed
+    const headerHeight = 350 // Space for header, customer info on first page
+    const footerHeight = 250 // Space for totals and footer
+    const itemsOnFirstPage = Math.floor((maxPageHeight - headerHeight - footerHeight) / itemHeight)
+    const remainingItems = Math.max(0, cartItems.value.length - itemsOnFirstPage)
+    const additionalPages = Math.ceil(remainingItems / itemsPerPage)
+    const totalPages = 1 + additionalPages
+
+    // If single page is enough, use simpler calculation
+    if (totalPages === 1) {
+      const baseHeight = 650
+      // Calculate notes height based on text length (word wrapping)
+      const notesHeight = notes.value ? Math.max(60, Math.ceil(notes.value.length / 50) * 18 + 40) : 0
+      // Calculate address height based on text length
+      const addressHeight = delivery.value.addressDetails ? Math.max(40, Math.ceil(delivery.value.addressDetails.length / 50) * 18 + 20) : 0
+      const discountHeight = appliedCoupon.value ? 25 : 0
+      const totalHeight = baseHeight + (cartItems.value.length * itemHeight) + notesHeight + addressHeight + discountHeight
+
+      const canvas = document.createElement('canvas')
+      const ctx = canvas.getContext('2d')
+      canvas.width = width
+      canvas.height = Math.max(800, totalHeight)
+
+      // Draw single page content (use the multi-page function with single page params)
+      const getXSingle = (leftPos, rightPos) => isArabic ? rightPos : leftPos
+      const getAlignSingle = (ltrAlign) => {
+        if (ltrAlign === 'left') return isArabic ? 'right' : 'left'
+        if (ltrAlign === 'right') return isArabic ? 'left' : 'right'
+        return ltrAlign
+      }
+      drawSinglePage(ctx, canvas.width, canvas.height, padding, contentWidth, cartItems.value, isArabic, getXSingle, getAlignSingle)
+      return canvas.toDataURL('image/png')
+    }
+
+    // Multi-page: create combined canvas
+    const pageGap = 20
+    const totalCanvasHeight = (maxPageHeight * totalPages) + (pageGap * (totalPages - 1))
+    const canvas = document.createElement('canvas')
+    const ctx = canvas.getContext('2d')
+    canvas.width = width
+    canvas.height = totalCanvasHeight
+
+    // White background
+    ctx.fillStyle = '#f5f5f5'
     ctx.fillRect(0, 0, canvas.width, canvas.height)
 
-    // Border
-    ctx.strokeStyle = '#e5e5e5'
-    ctx.lineWidth = 2
-    ctx.strokeRect(1, 1, canvas.width - 2, canvas.height - 2)
+    // Draw each page
+    let itemIndex = 0
+    for (let page = 0; page < totalPages; page++) {
+      const pageY = page * (maxPageHeight + pageGap)
+      const isFirstPage = page === 0
+      const isLastPage = page === totalPages - 1
 
-    // Header with primary color
-    ctx.fillStyle = '#5b3a8c'
-    ctx.fillRect(0, 0, width, 80)
+      // Page background
+      ctx.fillStyle = '#ffffff'
+      ctx.fillRect(0, pageY, width, maxPageHeight)
 
-    // Store logo/name
-    ctx.fillStyle = '#ffffff'
-    ctx.font = 'bold 28px Arial, sans-serif'
-    ctx.textAlign = 'center'
-    ctx.fillText(isArabic ? 'متجر حور' : 'HOOR STORE', width / 2, 45)
+      // Page border
+      ctx.strokeStyle = '#e5e5e5'
+      ctx.lineWidth = 2
+      ctx.strokeRect(1, pageY + 1, width - 2, maxPageHeight - 2)
 
-    // Order number badge
+      // Calculate items for this page
+      const itemsThisPage = isFirstPage ? itemsOnFirstPage : itemsPerPage
+      const pageItems = cartItems.value.slice(itemIndex, itemIndex + itemsThisPage)
+      itemIndex += pageItems.length
+
+      // Draw page content
+      drawPageContentMulti(ctx, width, padding, contentWidth, pageY, page, totalPages, pageItems, isFirstPage, isLastPage, isArabic, getX, getAlign)
+    }
+
+    return canvas.toDataURL('image/png')
+  } catch (error) {
+    console.error('Screenshot error:', error)
+    return null
+  }
+}
+
+// Draw single page content
+const drawSinglePage = (ctx, width, height, padding, contentWidth, items, isArabic, getX, getAlign) => {
+  // White background
+  ctx.fillStyle = '#ffffff'
+  ctx.fillRect(0, 0, width, height)
+
+  // Border
+  ctx.strokeStyle = '#e5e5e5'
+  ctx.lineWidth = 2
+  ctx.strokeRect(1, 1, width - 2, height - 2)
+
+  // Header
+  ctx.fillStyle = '#5b3a8c'
+  ctx.fillRect(0, 0, width, 80)
+
+  ctx.fillStyle = '#ffffff'
+  ctx.font = 'bold 28px Arial, sans-serif'
+  ctx.textAlign = 'center'
+  ctx.fillText(isArabic ? 'متجر حور' : 'HOOR STORE', width / 2, 45)
+
+  ctx.font = '14px Arial, sans-serif'
+  ctx.fillText(`${isArabic ? 'رقم الطلب' : 'Order'} #${completedOrder.value?.orderNumber || ''}`, width / 2, 68)
+
+  let y = 110
+
+  // Success checkmark
+  ctx.beginPath()
+  ctx.arc(width / 2, y, 25, 0, 2 * Math.PI)
+  ctx.fillStyle = '#ede9f3'
+  ctx.fill()
+  ctx.strokeStyle = '#5b3a8c'
+  ctx.lineWidth = 3
+  ctx.stroke()
+
+  ctx.beginPath()
+  ctx.moveTo(width / 2 - 10, y)
+  ctx.lineTo(width / 2 - 3, y + 8)
+  ctx.lineTo(width / 2 + 12, y - 8)
+  ctx.strokeStyle = '#5b3a8c'
+  ctx.lineWidth = 3
+  ctx.stroke()
+
+  y += 50
+
+  ctx.fillStyle = '#5b3a8c'
+  ctx.font = 'bold 18px Arial, sans-serif'
+  ctx.textAlign = 'center'
+  ctx.fillText(isArabic ? 'تم الطلب بنجاح!' : 'Order Placed Successfully!', width / 2, y)
+
+  y += 40
+
+  ctx.strokeStyle = '#e5e5e5'
+  ctx.lineWidth = 1
+  ctx.beginPath()
+  ctx.moveTo(padding, y)
+  ctx.lineTo(width - padding, y)
+  ctx.stroke()
+
+  y += 25
+
+  // Customer Info
+  ctx.fillStyle = '#5b3a8c'
+  ctx.font = 'bold 16px Arial, sans-serif'
+  ctx.textAlign = getAlign('left')
+  ctx.fillText(isArabic ? 'بيانات العميل' : 'Customer Information', getX(padding, width - padding), y)
+
+  y += 25
+  ctx.fillStyle = '#374151'
+  ctx.font = '14px Arial, sans-serif'
+
+  const nameLabel = isArabic ? 'الاسم:' : 'Name:'
+  ctx.font = 'bold 14px Arial, sans-serif'
+  ctx.fillText(nameLabel, getX(padding, width - padding), y)
+  ctx.font = '14px Arial, sans-serif'
+  const nameLabelWidth = ctx.measureText(nameLabel).width + 10
+  ctx.fillText(delivery.value.fullName, getX(padding + nameLabelWidth, width - padding - nameLabelWidth), y)
+
+  y += 22
+
+  const phoneLabel = isArabic ? 'الهاتف:' : 'Phone:'
+  ctx.font = 'bold 14px Arial, sans-serif'
+  ctx.fillText(phoneLabel, getX(padding, width - padding), y)
+  ctx.font = '14px Arial, sans-serif'
+  const phoneLabelWidth = ctx.measureText(phoneLabel).width + 10
+  const phoneText = delivery.value.phone2 ? `${delivery.value.phone} - ${delivery.value.phone2}` : delivery.value.phone
+  ctx.fillText(phoneText, getX(padding + phoneLabelWidth, width - padding - phoneLabelWidth), y)
+
+  y += 22
+
+  if (contact.value) {
+    const emailLabel = isArabic ? 'البريد:' : 'Email:'
+    ctx.font = 'bold 14px Arial, sans-serif'
+    ctx.fillText(emailLabel, getX(padding, width - padding), y)
     ctx.font = '14px Arial, sans-serif'
-    ctx.fillText(`${isArabic ? 'رقم الطلب' : 'Order'} #${completedOrder.value?.orderNumber || ''}`, width / 2, 68)
+    const emailLabelWidth = ctx.measureText(emailLabel).width + 10
+    ctx.fillText(contact.value, getX(padding + emailLabelWidth, width - padding - emailLabelWidth), y)
+    y += 22
+  }
 
-    let y = 110
+  const govLabel = isArabic ? 'المحافظة:' : 'Governorate:'
+  ctx.font = 'bold 14px Arial, sans-serif'
+  ctx.fillText(govLabel, getX(padding, width - padding), y)
+  ctx.font = '14px Arial, sans-serif'
+  const govLabelWidth = ctx.measureText(govLabel).width + 10
+  ctx.fillText(t('checkout.governorates.' + delivery.value.governorate), getX(padding + govLabelWidth, width - padding - govLabelWidth), y)
 
+  y += 22
+
+  if (delivery.value.addressDetails) {
+    const addrLabel = isArabic ? 'العنوان:' : 'Address:'
+    ctx.font = 'bold 14px Arial, sans-serif'
+    ctx.fillText(addrLabel, getX(padding, width - padding), y)
+    y += 18
+    ctx.font = '13px Arial, sans-serif'
+    ctx.fillStyle = '#6b7280'
+    const maxWidth = contentWidth - 20
+    const words = delivery.value.addressDetails.split(' ')
+    let line = ''
+    for (let word of words) {
+      const testLine = line + word + ' '
+      if (ctx.measureText(testLine).width > maxWidth && line !== '') {
+        ctx.fillText(line.trim(), getX(padding + 10, width - padding - 10), y)
+        line = word + ' '
+        y += 18
+      } else {
+        line = testLine
+      }
+    }
+    if (line.trim()) {
+      ctx.fillText(line.trim(), getX(padding + 10, width - padding - 10), y)
+    }
+    ctx.fillStyle = '#374151'
+  }
+
+  y += 25
+
+  if (notes.value) {
+    const notesLabel = isArabic ? 'ملاحظات:' : 'Notes:'
+    ctx.font = 'bold 14px Arial, sans-serif'
+    ctx.fillStyle = '#5b3a8c'
+    ctx.fillText(notesLabel, getX(padding, width - padding), y)
+    y += 18
+    ctx.font = '13px Arial, sans-serif'
+    ctx.fillStyle = '#6b7280'
+    // Word wrap for notes
+    const maxNotesWidth = contentWidth - 20
+    const notesWords = notes.value.split(' ')
+    let notesLine = ''
+    for (let word of notesWords) {
+      const testLine = notesLine + word + ' '
+      if (ctx.measureText(testLine).width > maxNotesWidth && notesLine !== '') {
+        ctx.fillText(notesLine.trim(), getX(padding + 10, width - padding - 10), y)
+        notesLine = word + ' '
+        y += 18
+      } else {
+        notesLine = testLine
+      }
+    }
+    if (notesLine.trim()) {
+      ctx.fillText(notesLine.trim(), getX(padding + 10, width - padding - 10), y)
+    }
+    y += 25
+  }
+
+  ctx.strokeStyle = '#e5e5e5'
+  ctx.beginPath()
+  ctx.moveTo(padding, y)
+  ctx.lineTo(width - padding, y)
+  ctx.stroke()
+
+  y += 25
+
+  // Products
+  ctx.fillStyle = '#5b3a8c'
+  ctx.font = 'bold 16px Arial, sans-serif'
+  ctx.textAlign = getAlign('left')
+  ctx.fillText(isArabic ? 'المنتجات' : 'Order Items', getX(padding, width - padding), y)
+
+  y += 20
+
+  items.forEach((item, index) => {
+    if (index % 2 === 0) {
+      ctx.fillStyle = '#fafafa'
+      ctx.fillRect(padding, y - 5, contentWidth, 70)
+    }
+
+    y += 15
+
+    ctx.fillStyle = '#1f2937'
+    ctx.font = 'bold 14px Arial, sans-serif'
+    ctx.textAlign = getAlign('left')
+    ctx.fillText(item.name, getX(padding + 10, width - padding - 10), y)
+
+    ctx.textAlign = getAlign('right')
+    ctx.fillStyle = '#5b3a8c'
+    ctx.fillText(`${(item.price * item.quantity).toFixed(2)} ${currencySymbol.value}`, getX(width - padding - 10, padding + 10), y)
+
+    y += 20
+
+    ctx.fillStyle = '#6b7280'
+    ctx.font = '13px Arial, sans-serif'
+    ctx.textAlign = getAlign('left')
+    const sizesStr = Array.isArray(item.sizes) ? item.sizes.join(', ') : item.sizes
+    const details = [item.color, sizesStr, item.height, item.weight].filter(Boolean).join(' | ')
+    ctx.fillText(details, getX(padding + 10, width - padding - 10), y)
+
+    y += 18
+
+    const qtyLabel = isArabic ? 'الكمية:' : 'Qty:'
+    ctx.fillText(`${qtyLabel} ${item.quantity}`, getX(padding + 10, width - padding - 10), y)
+
+    y += 25
+  })
+
+  y += 10
+
+  // Totals
+  const totalsHeight = appliedCoupon.value ? 125 : 100
+  ctx.fillStyle = '#f9fafb'
+  ctx.fillRect(padding, y, contentWidth, totalsHeight)
+  ctx.strokeStyle = '#e5e5e5'
+  ctx.strokeRect(padding, y, contentWidth, totalsHeight)
+
+  y += 25
+
+  ctx.fillStyle = '#374151'
+  ctx.font = '14px Arial, sans-serif'
+  ctx.textAlign = getAlign('left')
+  ctx.fillText(isArabic ? 'المجموع الفرعي' : 'Subtotal', getX(padding + 15, width - padding - 15), y)
+  ctx.textAlign = getAlign('right')
+  ctx.fillText(`${subtotal.value.toFixed(2)} ${currencySymbol.value}`, getX(width - padding - 15, padding + 15), y)
+
+  y += 22
+
+  ctx.textAlign = getAlign('left')
+  ctx.fillText(isArabic ? 'الشحن' : 'Shipping', getX(padding + 15, width - padding - 15), y)
+  ctx.textAlign = getAlign('right')
+  ctx.fillText(`${shippingCost.value.toFixed(2)} ${currencySymbol.value}`, getX(width - padding - 15, padding + 15), y)
+
+  if (appliedCoupon.value && discountAmount.value > 0) {
+    y += 22
+    ctx.fillStyle = '#16a34a'
+    ctx.textAlign = getAlign('left')
+    ctx.fillText(isArabic ? `خصم (${appliedCoupon.value.code})` : `Discount (${appliedCoupon.value.code})`, getX(padding + 15, width - padding - 15), y)
+    ctx.textAlign = getAlign('right')
+    ctx.fillText(`-${discountAmount.value.toFixed(2)} ${currencySymbol.value}`, getX(width - padding - 15, padding + 15), y)
+  }
+
+  y += 28
+
+  ctx.fillStyle = '#1f2937'
+  ctx.font = 'bold 18px Arial, sans-serif'
+  ctx.textAlign = getAlign('left')
+  ctx.fillText(isArabic ? 'الإجمالي' : 'Total', getX(padding + 15, width - padding - 15), y)
+  ctx.fillStyle = '#5b3a8c'
+  ctx.textAlign = getAlign('right')
+  ctx.fillText(`${total.value.toFixed(2)} ${currencySymbol.value}`, getX(width - padding - 15, padding + 15), y)
+
+  y += 45
+
+  // Payment badge
+  ctx.fillStyle = '#ede9f3'
+  const badgeWidth = 250
+  const badgeX = (width - badgeWidth) / 2
+  ctx.beginPath()
+  ctx.roundRect(badgeX, y, badgeWidth, 35, 8)
+  ctx.fill()
+
+  ctx.fillStyle = '#5b3a8c'
+  ctx.font = '14px Arial, sans-serif'
+  ctx.textAlign = 'center'
+  ctx.fillText(isArabic ? 'الدفع عند الاستلام' : 'Cash on Delivery', width / 2, y + 23)
+
+  y += 55
+
+  ctx.fillStyle = '#9ca3af'
+  ctx.font = '12px Arial, sans-serif'
+  ctx.textAlign = 'center'
+  ctx.fillText(isArabic ? 'شكراً لتسوقكم من متجر حور' : 'Thank you for shopping at HOOR Store', width / 2, y)
+
+  y += 18
+  ctx.fillText(
+    new Date().toLocaleDateString(isArabic ? 'ar-EG' : 'en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    }),
+    width / 2,
+    y
+  )
+}
+
+// Draw content for multi-page layout
+const drawPageContentMulti = (ctx, width, padding, contentWidth, pageY, pageNum, totalPages, pageItems, isFirstPage, isLastPage, isArabic, getX, getAlign) => {
+  let y = pageY + 20
+
+  // Header on every page
+  ctx.fillStyle = '#5b3a8c'
+  ctx.fillRect(0, pageY, width, 60)
+
+  ctx.fillStyle = '#ffffff'
+  ctx.font = 'bold 22px Arial, sans-serif'
+  ctx.textAlign = 'center'
+  ctx.fillText(isArabic ? 'متجر حور' : 'HOOR STORE', width / 2, pageY + 35)
+
+  ctx.font = '12px Arial, sans-serif'
+  ctx.fillText(`${isArabic ? 'رقم الطلب' : 'Order'} #${completedOrder.value?.orderNumber || ''} - ${isArabic ? 'صفحة' : 'Page'} ${pageNum + 1}/${totalPages}`, width / 2, pageY + 52)
+
+  y = pageY + 80
+
+  if (isFirstPage) {
     // Success checkmark
     ctx.beginPath()
-    ctx.arc(width / 2, y, 25, 0, 2 * Math.PI)
+    ctx.arc(width / 2, y, 20, 0, 2 * Math.PI)
     ctx.fillStyle = '#ede9f3'
     ctx.fill()
     ctx.strokeStyle = '#5b3a8c'
-    ctx.lineWidth = 3
+    ctx.lineWidth = 2
     ctx.stroke()
 
-    // Checkmark
     ctx.beginPath()
-    ctx.moveTo(width / 2 - 10, y)
-    ctx.lineTo(width / 2 - 3, y + 8)
-    ctx.lineTo(width / 2 + 12, y - 8)
+    ctx.moveTo(width / 2 - 8, y)
+    ctx.lineTo(width / 2 - 2, y + 6)
+    ctx.lineTo(width / 2 + 10, y - 6)
     ctx.strokeStyle = '#5b3a8c'
-    ctx.lineWidth = 3
+    ctx.lineWidth = 2
     ctx.stroke()
 
-    y += 50
+    y += 35
 
-    // Success message
     ctx.fillStyle = '#5b3a8c'
-    ctx.font = 'bold 18px Arial, sans-serif'
+    ctx.font = 'bold 16px Arial, sans-serif'
     ctx.textAlign = 'center'
     ctx.fillText(isArabic ? 'تم الطلب بنجاح!' : 'Order Placed Successfully!', width / 2, y)
 
-    y += 40
+    y += 25
 
     // Divider
     ctx.strokeStyle = '#e5e5e5'
@@ -450,91 +804,57 @@ const takeScreenshot = async () => {
     ctx.lineTo(width - padding, y)
     ctx.stroke()
 
-    y += 25
+    y += 20
 
-    // Customer Information Section
+    // Customer Information
     ctx.fillStyle = '#5b3a8c'
-    ctx.font = 'bold 16px Arial, sans-serif'
+    ctx.font = 'bold 14px Arial, sans-serif'
     ctx.textAlign = getAlign('left')
-    ctx.fillText(
-      isArabic ? 'بيانات العميل' : 'Customer Information',
-      getX(padding, width - padding),
-      y
-    )
+    ctx.fillText(isArabic ? 'بيانات العميل' : 'Customer Information', getX(padding, width - padding), y)
 
-    y += 25
+    y += 20
     ctx.fillStyle = '#374151'
-    ctx.font = '14px Arial, sans-serif'
+    ctx.font = '13px Arial, sans-serif'
 
     // Name
     const nameLabel = isArabic ? 'الاسم:' : 'Name:'
-    ctx.font = 'bold 14px Arial, sans-serif'
+    ctx.font = 'bold 13px Arial, sans-serif'
     ctx.fillText(nameLabel, getX(padding, width - padding), y)
-    ctx.font = '14px Arial, sans-serif'
-    const nameLabelWidth = ctx.measureText(nameLabel).width + 10
-    ctx.fillText(
-      delivery.value.fullName,
-      getX(padding + nameLabelWidth, width - padding - nameLabelWidth),
-      y
-    )
+    ctx.font = '13px Arial, sans-serif'
+    const nameLabelWidth = ctx.measureText(nameLabel).width + 8
+    ctx.fillText(delivery.value.fullName, getX(padding + nameLabelWidth, width - padding - nameLabelWidth), y)
 
-    y += 22
+    y += 18
 
     // Phone
     const phoneLabel = isArabic ? 'الهاتف:' : 'Phone:'
-    ctx.font = 'bold 14px Arial, sans-serif'
+    ctx.font = 'bold 13px Arial, sans-serif'
     ctx.fillText(phoneLabel, getX(padding, width - padding), y)
-    ctx.font = '14px Arial, sans-serif'
-    const phoneLabelWidth = ctx.measureText(phoneLabel).width + 10
+    ctx.font = '13px Arial, sans-serif'
+    const phoneLabelWidth = ctx.measureText(phoneLabel).width + 8
     const phoneText = delivery.value.phone2 ? `${delivery.value.phone} - ${delivery.value.phone2}` : delivery.value.phone
-    ctx.fillText(
-      phoneText,
-      getX(padding + phoneLabelWidth, width - padding - phoneLabelWidth),
-      y
-    )
+    ctx.fillText(phoneText, getX(padding + phoneLabelWidth, width - padding - phoneLabelWidth), y)
 
-    y += 22
-
-    // Email (if exists)
-    if (contact.value) {
-      const emailLabel = isArabic ? 'البريد:' : 'Email:'
-      ctx.font = 'bold 14px Arial, sans-serif'
-      ctx.fillText(emailLabel, getX(padding, width - padding), y)
-      ctx.font = '14px Arial, sans-serif'
-      const emailLabelWidth = ctx.measureText(emailLabel).width + 10
-      ctx.fillText(
-        contact.value,
-        getX(padding + emailLabelWidth, width - padding - emailLabelWidth),
-        y
-      )
-      y += 22
-    }
+    y += 18
 
     // Governorate
     const govLabel = isArabic ? 'المحافظة:' : 'Governorate:'
-    ctx.font = 'bold 14px Arial, sans-serif'
+    ctx.font = 'bold 13px Arial, sans-serif'
     ctx.fillText(govLabel, getX(padding, width - padding), y)
-    ctx.font = '14px Arial, sans-serif'
-    const govLabelWidth = ctx.measureText(govLabel).width + 10
-    const govName = t('checkout.governorates.' + delivery.value.governorate)
-    ctx.fillText(
-      govName,
-      getX(padding + govLabelWidth, width - padding - govLabelWidth),
-      y
-    )
+    ctx.font = '13px Arial, sans-serif'
+    const govLabelWidth = ctx.measureText(govLabel).width + 8
+    ctx.fillText(t('checkout.governorates.' + delivery.value.governorate), getX(padding + govLabelWidth, width - padding - govLabelWidth), y)
 
-    y += 22
+    y += 18
 
     // Address
     if (delivery.value.addressDetails) {
       const addrLabel = isArabic ? 'العنوان:' : 'Address:'
-      ctx.font = 'bold 14px Arial, sans-serif'
+      ctx.font = 'bold 13px Arial, sans-serif'
       ctx.fillText(addrLabel, getX(padding, width - padding), y)
-      y += 18
-      ctx.font = '13px Arial, sans-serif'
+      y += 15
+      ctx.font = '12px Arial, sans-serif'
       ctx.fillStyle = '#6b7280'
-
-      // Wrap long address text
       const maxWidth = contentWidth - 20
       const words = delivery.value.addressDetails.split(' ')
       let line = ''
@@ -543,7 +863,7 @@ const takeScreenshot = async () => {
         if (ctx.measureText(testLine).width > maxWidth && line !== '') {
           ctx.fillText(line.trim(), getX(padding + 10, width - padding - 10), y)
           line = word + ' '
-          y += 18
+          y += 15
         } else {
           line = testLine
         }
@@ -554,19 +874,35 @@ const takeScreenshot = async () => {
       ctx.fillStyle = '#374151'
     }
 
-    y += 25
+    y += 20
 
-    // Notes (if exists)
+    // Notes
     if (notes.value) {
       const notesLabel = isArabic ? 'ملاحظات:' : 'Notes:'
-      ctx.font = 'bold 14px Arial, sans-serif'
+      ctx.font = 'bold 13px Arial, sans-serif'
       ctx.fillStyle = '#5b3a8c'
       ctx.fillText(notesLabel, getX(padding, width - padding), y)
-      y += 18
-      ctx.font = '13px Arial, sans-serif'
+      y += 15
+      ctx.font = '12px Arial, sans-serif'
       ctx.fillStyle = '#6b7280'
-      ctx.fillText(notes.value, getX(padding + 10, width - padding - 10), y)
-      y += 25
+      // Word wrap for notes
+      const maxNotesWidth = contentWidth - 20
+      const notesWords = notes.value.split(' ')
+      let notesLine = ''
+      for (let word of notesWords) {
+        const testLine = notesLine + word + ' '
+        if (ctx.measureText(testLine).width > maxNotesWidth && notesLine !== '') {
+          ctx.fillText(notesLine.trim(), getX(padding + 10, width - padding - 10), y)
+          notesLine = word + ' '
+          y += 15
+        } else {
+          notesLine = testLine
+        }
+      }
+      if (notesLine.trim()) {
+        ctx.fillText(notesLine.trim(), getX(padding + 10, width - padding - 10), y)
+      }
+      y += 20
     }
 
     // Divider
@@ -576,178 +912,129 @@ const takeScreenshot = async () => {
     ctx.lineTo(width - padding, y)
     ctx.stroke()
 
-    y += 25
+    y += 15
+  }
 
-    // Order Items Section
-    ctx.fillStyle = '#5b3a8c'
-    ctx.font = 'bold 16px Arial, sans-serif'
+  // Products section header
+  ctx.fillStyle = '#5b3a8c'
+  ctx.font = 'bold 14px Arial, sans-serif'
+  ctx.textAlign = getAlign('left')
+  ctx.fillText(
+    isArabic ? 'المنتجات' : 'Order Items',
+    getX(padding, width - padding),
+    y
+  )
+
+  y += 15
+
+  // Items
+  pageItems.forEach((item, index) => {
+    if (index % 2 === 0) {
+      ctx.fillStyle = '#fafafa'
+      ctx.fillRect(padding, y - 3, contentWidth, 65)
+    }
+
+    y += 12
+
+    ctx.fillStyle = '#1f2937'
+    ctx.font = 'bold 13px Arial, sans-serif'
     ctx.textAlign = getAlign('left')
+    ctx.fillText(item.name, getX(padding + 10, width - padding - 10), y)
+
+    ctx.textAlign = getAlign('right')
+    ctx.fillStyle = '#5b3a8c'
     ctx.fillText(
-      isArabic ? 'المنتجات' : 'Order Items',
-      getX(padding, width - padding),
+      `${(item.price * item.quantity).toFixed(2)} ${currencySymbol.value}`,
+      getX(width - padding - 10, padding + 10),
       y
     )
 
-    y += 20
+    y += 16
 
-    // Items
-    cartItems.value.forEach((item, index) => {
-      // Item background
-      if (index % 2 === 0) {
-        ctx.fillStyle = '#fafafa'
-        ctx.fillRect(padding, y - 5, contentWidth, 70)
-      }
+    ctx.fillStyle = '#6b7280'
+    ctx.font = '12px Arial, sans-serif'
+    ctx.textAlign = getAlign('left')
+    const sizesStr = Array.isArray(item.sizes) ? item.sizes.join(', ') : item.sizes
+    const details = [item.color, sizesStr, item.height, item.weight].filter(Boolean).join(' | ')
+    ctx.fillText(details, getX(padding + 10, width - padding - 10), y)
 
-      y += 15
+    y += 14
 
-      // Item name
-      ctx.fillStyle = '#1f2937'
-      ctx.font = 'bold 14px Arial, sans-serif'
-      ctx.textAlign = getAlign('left')
-      ctx.fillText(item.name, getX(padding + 10, width - padding - 10), y)
+    const qtyLabel = isArabic ? 'الكمية:' : 'Qty:'
+    ctx.fillText(`${qtyLabel} ${item.quantity}`, getX(padding + 10, width - padding - 10), y)
 
-      // Price on the opposite side
-      ctx.textAlign = getAlign('right')
-      ctx.fillStyle = '#5b3a8c'
-      ctx.fillText(
-        `${(item.price * item.quantity).toFixed(2)} ${currencySymbol.value}`,
-        getX(width - padding - 10, padding + 10),
-        y
-      )
+    y += 25
+  })
 
-      y += 20
-
-      // Item details (color, sizes, height, weight)
-      ctx.fillStyle = '#6b7280'
-      ctx.font = '13px Arial, sans-serif'
-      ctx.textAlign = getAlign('left')
-      const sizesStr = Array.isArray(item.sizes) ? item.sizes.join(', ') : item.sizes
-      const details = [item.color, sizesStr, item.height, item.weight].filter(Boolean).join(' | ')
-      ctx.fillText(details, getX(padding + 10, width - padding - 10), y)
-
-      y += 18
-
-      // Quantity
-      const qtyLabel = isArabic ? 'الكمية:' : 'Qty:'
-      ctx.fillText(`${qtyLabel} ${item.quantity}`, getX(padding + 10, width - padding - 10), y)
-
-      y += 25
-    })
-
+  // Totals on last page
+  if (isLastPage) {
     y += 10
 
-    // Totals Section with background (height depends on discount)
-    const totalsHeight = appliedCoupon.value ? 125 : 100
+    const totalsHeight = appliedCoupon.value ? 110 : 90
     ctx.fillStyle = '#f9fafb'
     ctx.fillRect(padding, y, contentWidth, totalsHeight)
-
-    // Border for totals
     ctx.strokeStyle = '#e5e5e5'
     ctx.strokeRect(padding, y, contentWidth, totalsHeight)
 
-    y += 25
+    y += 22
 
-    // Subtotal
     ctx.fillStyle = '#374151'
-    ctx.font = '14px Arial, sans-serif'
+    ctx.font = '13px Arial, sans-serif'
     ctx.textAlign = getAlign('left')
-    ctx.fillText(
-      isArabic ? 'المجموع الفرعي' : 'Subtotal',
-      getX(padding + 15, width - padding - 15),
-      y
-    )
+    ctx.fillText(isArabic ? 'المجموع الفرعي' : 'Subtotal', getX(padding + 15, width - padding - 15), y)
     ctx.textAlign = getAlign('right')
-    ctx.fillText(
-      `${subtotal.value.toFixed(2)} ${currencySymbol.value}`,
-      getX(width - padding - 15, padding + 15),
-      y
-    )
+    ctx.fillText(`${subtotal.value.toFixed(2)} ${currencySymbol.value}`, getX(width - padding - 15, padding + 15), y)
+
+    y += 18
+
+    ctx.textAlign = getAlign('left')
+    ctx.fillText(isArabic ? 'الشحن' : 'Shipping', getX(padding + 15, width - padding - 15), y)
+    ctx.textAlign = getAlign('right')
+    ctx.fillText(`${shippingCost.value.toFixed(2)} ${currencySymbol.value}`, getX(width - padding - 15, padding + 15), y)
+
+    if (appliedCoupon.value && discountAmount.value > 0) {
+      y += 18
+      ctx.fillStyle = '#16a34a'
+      ctx.textAlign = getAlign('left')
+      ctx.fillText(isArabic ? `خصم (${appliedCoupon.value.code})` : `Discount (${appliedCoupon.value.code})`, getX(padding + 15, width - padding - 15), y)
+      ctx.textAlign = getAlign('right')
+      ctx.fillText(`-${discountAmount.value.toFixed(2)} ${currencySymbol.value}`, getX(width - padding - 15, padding + 15), y)
+    }
 
     y += 22
 
-    // Shipping
-    ctx.textAlign = getAlign('left')
-    ctx.fillText(
-      isArabic ? 'الشحن' : 'Shipping',
-      getX(padding + 15, width - padding - 15),
-      y
-    )
-    ctx.textAlign = getAlign('right')
-    ctx.fillText(
-      `${shippingCost.value.toFixed(2)} ${currencySymbol.value}`,
-      getX(width - padding - 15, padding + 15),
-      y
-    )
-
-    // Discount (if coupon applied)
-    if (appliedCoupon.value && discountAmount.value > 0) {
-      y += 22
-      ctx.fillStyle = '#16a34a'
-      ctx.textAlign = getAlign('left')
-      ctx.fillText(
-        isArabic ? `خصم (${appliedCoupon.value.code})` : `Discount (${appliedCoupon.value.code})`,
-        getX(padding + 15, width - padding - 15),
-        y
-      )
-      ctx.textAlign = getAlign('right')
-      ctx.fillText(
-        `-${discountAmount.value.toFixed(2)} ${currencySymbol.value}`,
-        getX(width - padding - 15, padding + 15),
-        y
-      )
-    }
-
-    y += 28
-
-    // Total
     ctx.fillStyle = '#1f2937'
-    ctx.font = 'bold 18px Arial, sans-serif'
+    ctx.font = 'bold 16px Arial, sans-serif'
     ctx.textAlign = getAlign('left')
-    ctx.fillText(
-      isArabic ? 'الإجمالي' : 'Total',
-      getX(padding + 15, width - padding - 15),
-      y
-    )
+    ctx.fillText(isArabic ? 'الإجمالي' : 'Total', getX(padding + 15, width - padding - 15), y)
     ctx.fillStyle = '#5b3a8c'
     ctx.textAlign = getAlign('right')
-    ctx.fillText(
-      `${total.value.toFixed(2)} ${currencySymbol.value}`,
-      getX(width - padding - 15, padding + 15),
-      y
-    )
+    ctx.fillText(`${total.value.toFixed(2)} ${currencySymbol.value}`, getX(width - padding - 15, padding + 15), y)
 
-    y += 45
+    y += 35
 
-    // Payment Method Badge
+    // Payment badge
     ctx.fillStyle = '#ede9f3'
-    const badgeWidth = 250
+    const badgeWidth = 200
     const badgeX = (width - badgeWidth) / 2
     ctx.beginPath()
-    ctx.roundRect(badgeX, y, badgeWidth, 35, 8)
+    ctx.roundRect(badgeX, y, badgeWidth, 30, 6)
     ctx.fill()
 
     ctx.fillStyle = '#5b3a8c'
-    ctx.font = '14px Arial, sans-serif'
+    ctx.font = '13px Arial, sans-serif'
     ctx.textAlign = 'center'
-    ctx.fillText(
-      isArabic ? 'الدفع عند الاستلام' : 'Cash on Delivery',
-      width / 2,
-      y + 23
-    )
+    ctx.fillText(isArabic ? 'الدفع عند الاستلام' : 'Cash on Delivery', width / 2, y + 20)
 
-    y += 55
+    y += 45
 
     // Footer
     ctx.fillStyle = '#9ca3af'
-    ctx.font = '12px Arial, sans-serif'
+    ctx.font = '11px Arial, sans-serif'
     ctx.textAlign = 'center'
-    ctx.fillText(
-      isArabic ? 'شكراً لتسوقكم من متجر حور' : 'Thank you for shopping at HOOR Store',
-      width / 2,
-      y
-    )
+    ctx.fillText(isArabic ? 'شكراً لتسوقكم من متجر حور' : 'Thank you for shopping at HOOR Store', width / 2, y)
 
-    y += 18
+    y += 15
     ctx.fillText(
       new Date().toLocaleDateString(isArabic ? 'ar-EG' : 'en-US', {
         year: 'numeric',
@@ -759,11 +1046,6 @@ const takeScreenshot = async () => {
       width / 2,
       y
     )
-
-    return canvas.toDataURL('image/png')
-  } catch (error) {
-    console.error('Screenshot error:', error)
-    return null
   }
 }
 
@@ -805,6 +1087,23 @@ const submitOrder = async () => {
 
   if (cartItems.value.length === 0) {
     errorMessage.value = t('checkout.cartEmpty')
+    return
+  }
+
+  // Validate quantity matches sizes count (if multiple sizes selected, quantity must be >= sizes count)
+  const invalidItems = cartItems.value.filter(item => {
+    const sizesCount = Array.isArray(item.sizes) ? item.sizes.length : (item.sizes ? 1 : 0)
+    // If multiple sizes selected, quantity must be at least equal to number of sizes
+    return sizesCount > 1 && item.quantity < sizesCount
+  })
+
+  if (invalidItems.length > 0) {
+    const item = invalidItems[0]
+    const sizesCount = Array.isArray(item.sizes) ? item.sizes.length : 1
+
+    errorMessage.value = locale.value === 'ar'
+      ? `"${item.name}": اخترت ${sizesCount} مقاسات لكن الكمية ${item.quantity} فقط. الكمية لازم تكون ${sizesCount} على الأقل`
+      : `"${item.name}": You selected ${sizesCount} sizes but quantity is only ${item.quantity}. Quantity must be at least ${sizesCount}`
     return
   }
 

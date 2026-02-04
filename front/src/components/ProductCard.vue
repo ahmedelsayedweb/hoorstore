@@ -47,9 +47,9 @@ const addToCart = (event) => {
 </script>
 
 <template>
-  <a :href="`/collections/${id}`" class="group block no-underline">
+  <a :href="`/collections/${id}`" class="group block no-underline ">
     <!-- Image Container -->
-    <div class="relative aspect-[3/4] overflow-hidden bg-gray-100 mb-3">
+    <div class="relative aspect-[3/4] overflow-hidden bg-gray-100 mb-3 rounded-lg">
       <img
         :src="image"
         :alt="name"
@@ -58,7 +58,7 @@ const addToCart = (event) => {
       <!-- Sale Badge -->
       <span
         v-if="isOnSale"
-        class="absolute bottom-4 left-4 bg-gray-900 text-white text-xs px-3 py-1.5"
+        class="absolute top-2 left-2 bg-primary text-white text-xs px-3 py-1.5"
       >
         {{ t('collection.sale') }}
       </span>
@@ -66,11 +66,11 @@ const addToCart = (event) => {
       <!-- Add to Cart Button -->
       <button
         @click="addToCart"
-        class="absolute bottom-4 right-4 bg-white text-gray-900 px-4 py-2.5 text-sm font-medium
-               flex items-center gap-2 shadow-lg
-               opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0
+        class="absolute bottom-4 right-4 bg-white rounded-lg text-gray-900 px-3 py-2 md:px-4 md:py-2.5 text-xs md:text-sm font-medium
+               flex items-center gap-1.5 md:gap-2 shadow-lg
+               opacity-100 md:opacity-0 translate-y-0 md:translate-y-2 md:group-hover:opacity-100 md:group-hover:translate-y-0
                transition-all duration-300 ease-out
-               hover:bg-gray-900 hover:text-white
+               hover:bg-primary hover:text-white
                active:scale-95"
       >
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

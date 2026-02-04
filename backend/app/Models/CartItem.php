@@ -17,6 +17,8 @@ class CartItem extends Model
         'height',
         'quantity',
         'added_at',
+        'has_sizes_available',
+        'has_colors_available',
     ];
 
     protected $casts = [
@@ -24,6 +26,8 @@ class CartItem extends Model
         'quantity' => 'integer',
         'added_at' => 'datetime',
         'sizes' => 'array',
+        'has_sizes_available' => 'boolean',
+        'has_colors_available' => 'boolean',
     ];
 
     public function cart()

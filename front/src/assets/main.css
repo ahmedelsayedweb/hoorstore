@@ -22,3 +22,12 @@
     @apply inline-block px-10 py-3.5 bg-transparent text-gray-900 border border-gray-900 text-sm tracking-wide transition-all duration-300 hover:bg-gray-900 hover:text-white;
   }
 }
+
+/* Hide scrollbar for horizontal scroll elements */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}

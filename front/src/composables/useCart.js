@@ -26,35 +26,48 @@ const arraysEqual = (a, b) => {
 
 export function useCart() {
   const addToCart = async (product) => {
-    const existingItem = cartItems.value.find(
-      item =>
-        item.productId === product.id &&
-        item.color === product.color &&
-        arraysEqual(item.sizes, product.sizes) &&
-        item.height === product.height
-    )
-
-    if (existingItem) {
-      existingItem.quantity += product.quantity
-      // Update in API
-      await cartApi.updateItem(existingItem.id, { quantity: existingItem.quantity })
-    } else {
-      // Add to API
-      const newItem = {
-        productId: product.id,
-        name: product.name,
-        price: product.price,
-        image: product.image,
-        color: product.color,
-        sizes: product.sizes,
-        height: product.height,
-        quantity: product.quantity
+    try {
+      // Ensure cartItems is an array
+      if (!Array.isArray(cartItems.value)) {
+        cartItems.value = []
       }
-      const updatedCart = await cartApi.addItem(newItem)
-      cartItems.value = updatedCart
-    }
 
-    isCartOpen.value = true
+      const existingItem = cartItems.value.find(
+        item =>
+          item.productId === product.id &&
+          item.color === product.color &&
+          arraysEqual(item.sizes, product.sizes) &&
+          item.height === product.height
+      )
+
+      if (existingItem) {
+        existingItem.quantity += product.quantity
+        // Update in API
+        await cartApi.updateItem(existingItem.id, { quantity: existingItem.quantity })
+      } else {
+        // Add to API
+        const newItem = {
+          productId: product.id,
+          name: product.name,
+          price: product.price,
+          image: product.image,
+          color: product.color || null,
+          sizes: Array.isArray(product.sizes) ? product.sizes : [],
+          height: product.height || null,
+          quantity: product.quantity || 1,
+          hasSizesAvailable: product.hasSizesAvailable || false,
+          hasColorsAvailable: product.hasColorsAvailable || false
+        }
+        const updatedCart = await cartApi.addItem(newItem)
+        if (Array.isArray(updatedCart)) {
+          cartItems.value = updatedCart
+        }
+      }
+
+      isCartOpen.value = true
+    } catch (error) {
+      console.error('Failed to add to cart:', error)
+    }
   }
 
   const removeFromCart = async (cartId) => {

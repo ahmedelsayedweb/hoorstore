@@ -60,12 +60,24 @@ const products = [
 const handleAddToCart = (productId) => {
   const product = products.find(p => p.id === productId)
   if (product) {
+    // Check if product has sizes or colors - redirect to product page if so
+    const hasSizes = product.sizes && product.sizes.length > 0
+    const hasColors = product.colors && product.colors.length > 0
+
+    if (hasSizes || hasColors) {
+      // Redirect to product page for size/color selection
+      window.location.href = `/collections/${productId}`
+      return
+    }
+
     addToCart({
       id: product.id,
       name: product.name,
       price: product.salePrice || product.originalPrice,
       image: product.image,
-      quantity: 1
+      quantity: 1,
+      hasSizesAvailable: false,
+      hasColorsAvailable: false
     })
   }
 }

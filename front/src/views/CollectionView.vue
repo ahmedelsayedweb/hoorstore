@@ -27,9 +27,7 @@ const categories = computed(() => [
 // Initialize category from URL query parameter
 const validCategories = ['all', 'children', 'men', 'woman']
 const getCategoryFromQuery = () => {
-  console.log(route.query.category);
   const queryCategory = route.query.category;
-  console.log(validCategories.includes(queryCategory) ? queryCategory : 'all');
   return validCategories.includes(queryCategory) ? queryCategory : 'all'
 }
 
@@ -62,7 +60,6 @@ const filteredProducts = computed(() => {
   if (selectedCategory.value === 'all') {
     return products.value
   }
-  console.log(selectedCategory.value);
   return products.value.filter(p => p.category === selectedCategory.value)
 })
 
@@ -88,12 +85,24 @@ const closeAllDropdowns = () => {
 const handleAddToCart = (productId) => {
   const product = products.value.find(p => p.id === productId)
   if (product) {
+    // Check if product has sizes or colors - redirect to product page if so
+    const hasSizes = product.sizes && product.sizes.length > 0
+    const hasColors = product.colors && product.colors.length > 0
+
+    if (hasSizes || hasColors) {
+      // Redirect to product page for size/color selection
+      window.location.href = `/collections/${productId}`
+      return
+    }
+
     addToCart({
       id: product.id,
       name: product.name,
       price: product.salePrice || product.price,
       image: product.image,
-      quantity: 1
+      quantity: 1,
+      hasSizesAvailable: false,
+      hasColorsAvailable: false
     })
   }
 }
@@ -115,13 +124,13 @@ onMounted(async () => {
     <!-- Category Tabs -->
     <div v-if="!hasCategoryInUrl" class="border-b border-gray-200">
       <div class="max-w-7xl mx-auto px-5 lg:px-8">
-        <nav class="flex gap-8 -mb-px" aria-label="Tabs">
+        <nav class="flex gap-4 md:gap-8 -mb-px overflow-x-auto scrollbar-hide" aria-label="Tabs">
           <button
             v-for="category in categories"
             :key="category.value"
             @click="selectedCategory = category.value"
             :class="[
-              'py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap transition-colors',
+              'py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap transition-colors flex-shrink-0',
               selectedCategory === category.value
                 ? 'border-primary text-primary'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'

@@ -32,6 +32,8 @@ class CartController extends Controller
                 'sizes' => $item->sizes,
                 'height' => $item->height,
                 'quantity' => $item->quantity,
+                'hasSizesAvailable' => $item->has_sizes_available,
+                'hasColorsAvailable' => $item->has_colors_available,
                 'addedAt' => $item->added_at ? $item->added_at->toISOString() : $item->created_at->toISOString(),
             ];
         });
@@ -54,6 +56,8 @@ class CartController extends Controller
             'sizes.*' => 'string',
             'height' => 'nullable|string',
             'quantity' => 'nullable|integer|min:1',
+            'hasSizesAvailable' => 'nullable|boolean',
+            'hasColorsAvailable' => 'nullable|boolean',
         ]);
 
         $cart = Cart::firstOrCreate(['browser_id' => $browserId]);
@@ -84,6 +88,8 @@ class CartController extends Controller
                 'height' => $request->input('height'),
                 'quantity' => $request->input('quantity', 1),
                 'added_at' => Carbon::now(),
+                'has_sizes_available' => $request->input('hasSizesAvailable', false),
+                'has_colors_available' => $request->input('hasColorsAvailable', false),
             ]);
         }
 
@@ -132,6 +138,8 @@ class CartController extends Controller
             'sizes' => $item->sizes,
             'height' => $item->height,
             'quantity' => $item->quantity,
+            'hasSizesAvailable' => $item->has_sizes_available,
+            'hasColorsAvailable' => $item->has_colors_available,
             'addedAt' => $item->added_at ? $item->added_at->toISOString() : $item->created_at->toISOString(),
         ]);
     }

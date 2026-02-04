@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useCart } from '../composables/useCart'
 import { useLanguage } from '../composables/useLanguage'
@@ -29,6 +29,8 @@ const navItems = computed(() => [
 const isCountryDropdownOpen = ref(false)
 const isLanguageDropdownOpen = ref(false)
 const isMobileMenuOpen = ref(false)
+const isMobileLanguageOpen = ref(false)
+const headerRef = ref(null)
 
 const toggleLanguageDropdown = () => {
   isLanguageDropdownOpen.value = !isLanguageDropdownOpen.value
@@ -37,16 +39,41 @@ const toggleLanguageDropdown = () => {
 
 const toggleMobileMenu = () => {
   isMobileMenuOpen.value = !isMobileMenuOpen.value
+  if (!isMobileMenuOpen.value) {
+    isMobileLanguageOpen.value = false
+  }
+}
+
+const toggleMobileLanguage = () => {
+  isMobileLanguageOpen.value = !isMobileLanguageOpen.value
 }
 
 const changeLanguage = (lang) => {
   setLanguage(lang)
   isLanguageDropdownOpen.value = false
+  isMobileLanguageOpen.value = false
 }
+
+// Close menu when clicking outside
+const handleClickOutside = (event) => {
+  if (headerRef.value && !headerRef.value.contains(event.target)) {
+    isMobileMenuOpen.value = false
+    isMobileLanguageOpen.value = false
+    isLanguageDropdownOpen.value = false
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('click', handleClickOutside)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleClickOutside)
+})
 </script>
 
 <template>
-  <header class="bg-white border-b border-gray-100 sticky top-0 z-50">
+  <header ref="headerRef" class="bg-white border-b border-gray-100 sticky top-0 z-50">
     <div class="max-w-7xl mx-auto px-5 lg:px-8 py-0 flex items-center justify-between gap-8">
       <!-- Mobile Menu Button -->
       <button @click="toggleMobileMenu" class="md:hidden p-1 bg-transparent border-none cursor-pointer">
@@ -65,7 +92,7 @@ const changeLanguage = (lang) => {
       <!-- Navigation -->
       <nav
         class="flex-1 hidden md:block"
-        :class="{ '!block absolute top-full left-0 right-0 bg-white border-b border-gray-100 p-5 z-50': isMobileMenuOpen }"
+        :class="{ '!block absolute top-full left-0 right-0 bg-white border-b border-gray-100 p-5 z-50 shadow-lg': isMobileMenuOpen }"
       >
         <ul class="flex items-center gap-8 list-none m-0 p-0" :class="{ 'flex-col !items-start !gap-4': isMobileMenuOpen }">
           <li v-for="item in navItems" :key="item.name">
@@ -76,6 +103,41 @@ const changeLanguage = (lang) => {
             >
               {{ item.name }}
             </a>
+          </li>
+          <!-- Mobile Language Selector -->
+          <li v-if="isMobileMenuOpen" class="w-full pt-4 border-t border-gray-100 mt-2">
+            <button
+              @click="toggleMobileLanguage"
+              class="flex items-center justify-between w-full bg-transparent border-none cursor-pointer text-gray-700 py-2"
+            >
+              <span class="flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="2" y1="12" x2="22" y2="12"></line>
+                  <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                </svg>
+                {{ currentLanguage }}
+              </span>
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" :class="{ 'rotate-180': isMobileLanguageOpen }" class="transition-transform">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </button>
+            <div v-if="isMobileLanguageOpen" class="mt-2 bg-gray-50 rounded-lg overflow-hidden">
+              <button
+                @click="changeLanguage('en')"
+                class="w-full text-start px-4 py-3 bg-transparent border-none cursor-pointer hover:bg-gray-100 transition-colors"
+                :class="{ 'bg-purple-50 text-purple-600': locale === 'en' }"
+              >
+                English
+              </button>
+              <button
+                @click="changeLanguage('ar')"
+                class="w-full text-start px-4 py-3 bg-transparent border-none cursor-pointer hover:bg-gray-100 transition-colors"
+                :class="{ 'bg-purple-50 text-purple-600': locale === 'ar' }"
+              >
+                العربية
+              </button>
+            </div>
           </li>
         </ul>
       </nav>
@@ -123,7 +185,7 @@ const changeLanguage = (lang) => {
               <path d="M6 6L4 2H1"></path>
             </svg>
             <span v-if="cartCount > 0"
-              class="absolute -top-1 -right-1 w-5 h-5 bg-gray-900 text-white text-xs rounded-full flex items-center justify-center">
+              class="absolute -top-1 -right-1 w-5 h-5 bg-primary text-white text-xs rounded-full flex items-center justify-center">
               {{ cartCount }}
             </span>
           </button>
