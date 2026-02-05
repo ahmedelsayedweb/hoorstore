@@ -6,6 +6,39 @@ use Illuminate\Database\Eloquent\Model;
 
 class Order extends Model
 {
+    /**
+     * Governorate key to Arabic name mapping
+     */
+    public const GOVERNORATES_AR = [
+        'cairo' => 'القاهرة',
+        'giza' => 'الجيزة',
+        'alexandria' => 'الإسكندرية',
+        'dakahlia' => 'الدقهلية',
+        'sharqia' => 'الشرقية',
+        'qalyubia' => 'القليوبية',
+        'beheira' => 'البحيرة',
+        'gharbia' => 'الغربية',
+        'menoufia' => 'المنوفية',
+        'kafrElSheikh' => 'كفر الشيخ',
+        'damietta' => 'دمياط',
+        'portSaid' => 'بورسعيد',
+        'ismailia' => 'الإسماعيلية',
+        'suez' => 'السويس',
+        'fayoum' => 'الفيوم',
+        'beniSuef' => 'بني سويف',
+        'minya' => 'المنيا',
+        'assiut' => 'أسيوط',
+        'sohag' => 'سوهاج',
+        'qena' => 'قنا',
+        'luxor' => 'الأقصر',
+        'aswan' => 'أسوان',
+        'redSea' => 'البحر الأحمر',
+        'newValley' => 'الوادي الجديد',
+        'matrouh' => 'مطروح',
+        'northSinai' => 'شمال سيناء',
+        'southSinai' => 'جنوب سيناء',
+    ];
+
     protected $fillable = [
         'order_number',
         'contact',
@@ -49,5 +82,13 @@ class Order extends Model
             'phone' => $this->phone,
             'phone2' => $this->phone2,
         ];
+    }
+
+    /**
+     * Get governorate name in Arabic
+     */
+    public function getGovernorateArabicAttribute(): string
+    {
+        return self::GOVERNORATES_AR[$this->governorate] ?? $this->governorate;
     }
 }

@@ -57,7 +57,7 @@ defineProps({
         :href="buttonLink"
         class="inline-block py-4 px-12 md:py-3 md:px-10 bg-primary text-white no-underline text-sm md:text-xs font-semibold tracking-wider uppercase transition-all duration-300 hover:bg-primary-dark hover:shadow-lg"
       >
-        {{ t('hero.shopAll') }}
+        {{ t('hero.shopNow') }}
       </a>
     </div>
   </section>

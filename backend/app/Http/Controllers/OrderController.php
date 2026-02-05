@@ -176,7 +176,7 @@ class OrderController extends Controller
             $message .= "📧 الايميل: {$order->contact}\n";
         }
         $message .= "📱 الهاتف: {$phoneText}\n";
-        $message .= "📍 المحافظة: {$order->governorate}\n";
+        $message .= "📍 المحافظة: {$order->governorate_arabic}\n";
         if ($order->address_details) {
             $message .= "📝 تفاصيل العنوان: {$order->address_details}\n";
         }
@@ -411,7 +411,7 @@ class OrderController extends Controller
                     <p><strong>الاسم:</strong> {$order->full_name}</p>
                     " . ($order->contact ? "<p><strong>الايميل:</strong> {$order->contact}</p>" : "") . "
                     <p><strong>الهاتف:</strong> {$order->phone}" . ($order->phone2 ? " - {$order->phone2}" : "") . "</p>
-                    <p><strong>المحافظة:</strong> {$order->governorate}</p>
+                    <p><strong>المحافظة:</strong> {$order->governorate_arabic}</p>
                     " . ($order->address_details ? "<p><strong>تفاصيل العنوان:</strong> {$order->address_details}</p>" : "") . "
                     " . ($order->notes ? "<p><strong>ملاحظات:</strong> {$order->notes}</p>" : "") . "
                 </div>
