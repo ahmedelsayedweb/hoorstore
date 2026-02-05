@@ -48,7 +48,7 @@ defineProps({
       </div>
 
       <!-- LIMITED TIME SALE subtitle -->
-      <p class="text-white text-[clamp(14px,2.5vw,20px)] tracking-[0.3em] md:tracking-[0.2em] uppercase mb-8 drop-shadow-md font-light">
+      <p class="text-white text-[clamp(14px,2.5vw,20px)] uppercase mb-8 drop-shadow-md font-light">
         {{ t('hero.limitedTimeSale') }}
       </p>
 
