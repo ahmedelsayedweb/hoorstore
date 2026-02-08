@@ -1,11 +1,20 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useCart } from '../composables/useCart'
 import { useLanguage } from '../composables/useLanguage'
 
 const route = useRoute()
+const router = useRouter()
 const { openCart, cartCount } = useCart()
+
+const handleCartClick = () => {
+  if (window.innerWidth < 768) {
+    router.push('/cart')
+  } else {
+    openCart()
+  }
+}
 const { locale, currentLanguage, setLanguage, t } = useLanguage()
 
 const isActive = (link) => {
@@ -177,7 +186,7 @@ onUnmounted(() => {
           </button>
 
           <!-- Cart -->
-          <button @click="openCart" class="bg-transparent border-none cursor-pointer p-1 text-gray-900 hover:opacity-60 transition-opacity relative" aria-label="Cart">
+          <button @click="handleCartClick" class="bg-transparent border-none cursor-pointer p-1 text-gray-900 hover:opacity-60 transition-opacity relative" aria-label="Cart">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M6 6h15l-1.5 9h-12z"></path>
               <circle cx="9" cy="20" r="1"></circle>

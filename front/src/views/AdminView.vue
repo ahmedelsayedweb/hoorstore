@@ -2,7 +2,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { productsApi, uploadApi } from '../api/products'
-import { ordersApi, couponsApi } from '../api/cart'
+import { ordersApi, couponsApi, migrateApi } from '../api/cart'
 
 const route = useRoute()
 const router = useRouter()
@@ -91,6 +91,53 @@ const couponsError = ref(null)
 const showCouponForm = ref(false)
 const editingCoupon = ref(null)
 const savingCoupon = ref(false)
+
+// Migrations state
+const migrations = ref([])
+const migrationsRaw = ref('')
+const migrationsLoading = ref(false)
+const migrationsError = ref(null)
+const migrationRunning = ref(false)
+const migrationReport = ref(null)
+
+// Fetch migration status
+const fetchMigrations = async () => {
+  try {
+    migrationsLoading.value = true
+    migrationsError.value = null
+    const data = await migrateApi.getStatus()
+    if (data.error) {
+      migrationsError.value = data.error
+    } else {
+      migrations.value = data.migrations || []
+      migrationsRaw.value = data.raw || ''
+    }
+  } catch (err) {
+    migrationsError.value = 'فشل في تحميل حالة التحديثات'
+    console.error(err)
+  } finally {
+    migrationsLoading.value = false
+  }
+}
+
+// Run migrations
+const runMigrations = async () => {
+  if (!confirm('هل أنت متأكد من تشغيل التحديثات على قاعدة البيانات؟')) return
+
+  try {
+    migrationRunning.value = true
+    migrationReport.value = null
+    const data = await migrateApi.run()
+    migrationReport.value = data
+    // Refresh status after running
+    await fetchMigrations()
+  } catch (err) {
+    migrationReport.value = { success: false, output: 'فشل في الاتصال بالسيرفر' }
+    console.error(err)
+  } finally {
+    migrationRunning.value = false
+  }
+}
 
 // Coupon form
 const couponForm = ref({
@@ -360,6 +407,9 @@ const switchTab = (tab) => {
   if (tab === 'coupons' && coupons.value.length === 0) {
     fetchCoupons()
   }
+  if (tab === 'migrations') {
+    fetchMigrations()
+  }
 }
 
 // Form state
@@ -386,6 +436,7 @@ const newColorImagePreview = ref(null)
 
 // Form data
 const form = ref({
+  code: '',
   name: '',
   price: '',
   salePrice: '',
@@ -583,6 +634,7 @@ const removeWeight = (index) => {
 // Reset form
 const resetForm = () => {
   form.value = {
+    code: '',
     name: '',
     price: '',
     salePrice: '',
@@ -628,6 +680,7 @@ const openEditForm = (product) => {
   })
 
   form.value = {
+    code: product.code || '',
     name: product.name || '',
     price: product.price || '',
     salePrice: product.salePrice || '',
@@ -689,6 +742,7 @@ const saveProduct = async () => {
     }
 
     const productData = {
+      code: form.value.code,
       name: form.value.name,
       price: parseFloat(form.value.price) || 0,
       salePrice: form.value.salePrice ? parseFloat(form.value.salePrice) : null,
@@ -744,24 +798,24 @@ const formTitle = computed(() =>
 <template>
   <div v-if="isAuthenticated" class="min-h-screen bg-gray-100" dir="rtl">
     <!-- Header -->
-    <header class="bg-white shadow">
-      <div class="max-w-7xl mx-auto px-4 py-6">
-        <h1 class="text-3xl font-bold text-gray-900">لوحة التحكم</h1>
-        <p class="text-gray-600 mt-1">إدارة المتجر</p>
+    <header class="admin-header">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+        <h1 class="text-2xl sm:text-3xl font-bold text-white">لوحة التحكم</h1>
+        <p class="text-purple-200 mt-1 text-sm sm:text-base">إدارة المتجر</p>
       </div>
     </header>
 
     <!-- Navigation Tabs -->
-    <div class="bg-white border-b">
-      <div class="max-w-7xl mx-auto px-4">
-        <nav class="flex gap-8">
+    <div class="bg-white shadow-sm sticky top-0 z-30">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6">
+        <nav class="flex overflow-x-auto scrollbar-hide -mb-px gap-1 sm:gap-2">
           <button
             @click="switchTab('products')"
             :class="[
-              'py-4 px-1 border-b-2 font-medium text-sm transition-colors',
+              'py-3 px-4 border-b-3 font-medium text-sm whitespace-nowrap transition-all',
               activeTab === 'products'
-                ? 'border-purple-600 text-purple-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                ? 'border-purple-600 text-purple-700 bg-purple-50/50'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
             ]"
           >
             المنتجات ({{ products.length }})
@@ -769,10 +823,10 @@ const formTitle = computed(() =>
           <button
             @click="switchTab('orders')"
             :class="[
-              'py-4 px-1 border-b-2 font-medium text-sm transition-colors',
+              'py-3 px-4 border-b-3 font-medium text-sm whitespace-nowrap transition-all',
               activeTab === 'orders'
-                ? 'border-purple-600 text-purple-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                ? 'border-purple-600 text-purple-700 bg-purple-50/50'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
             ]"
           >
             الطلبات ({{ orders.length }})
@@ -780,175 +834,218 @@ const formTitle = computed(() =>
           <button
             @click="switchTab('coupons')"
             :class="[
-              'py-4 px-1 border-b-2 font-medium text-sm transition-colors',
+              'py-3 px-4 border-b-3 font-medium text-sm whitespace-nowrap transition-all',
               activeTab === 'coupons'
-                ? 'border-purple-600 text-purple-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                ? 'border-purple-600 text-purple-700 bg-purple-50/50'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
             ]"
           >
             الكوبونات ({{ coupons.length }})
+          </button>
+          <button
+            @click="switchTab('migrations')"
+            :class="[
+              'py-3 px-4 border-b-3 font-medium text-sm whitespace-nowrap transition-all',
+              activeTab === 'migrations'
+                ? 'border-purple-600 text-purple-700 bg-purple-50/50'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+            ]"
+          >
+            تحديثات قاعدة البيانات
           </button>
         </nav>
       </div>
     </div>
 
-    <main class="max-w-7xl mx-auto px-4 py-8">
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
       <!-- ==================== PRODUCTS TAB ==================== -->
       <div v-if="activeTab === 'products'">
         <!-- Error Message -->
-        <div v-if="error" class="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+        <div v-if="error" class="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
           {{ error }}
         </div>
 
         <!-- Actions Bar -->
-        <div class="mb-6 flex justify-between items-center">
-          <h2 class="text-xl font-semibold text-gray-800">
-            المنتجات ({{ products.length }})
+        <div class="mb-5 flex justify-between items-center">
+          <h2 class="text-lg sm:text-xl font-bold text-gray-800">
+            المنتجات <span class="text-gray-400 font-normal">({{ products.length }})</span>
           </h2>
           <button
             @click="openNewForm"
-            class="bg-primary text-white px-4 py-2 rounded hover:bg-primary-dark transition-colors"
-            style="background-color: #5B3A8C;"
+            class="admin-btn-primary text-sm sm:text-base"
           >
             + إضافة منتج
           </button>
         </div>
 
         <!-- Loading State -->
-        <div v-if="loading" class="text-center py-12">
-          <p class="text-gray-500">جاري تحميل المنتجات...</p>
+        <div v-if="loading" class="text-center py-16">
+          <div class="inline-block w-8 h-8 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin mb-3"></div>
+          <p class="text-gray-500 text-sm">جاري تحميل المنتجات...</p>
         </div>
 
-      <!-- Products Table -->
-      <div v-else class="bg-white rounded-lg shadow overflow-hidden">
-        <table class="min-w-full divide-y divide-gray-200">
-          <thead class="bg-gray-50">
-            <tr>
-              <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                المنتج
-              </th>
-              <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                التصنيف
-              </th>
-              <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                السعر
-              </th>
-              <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                الحالة
-              </th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                الإجراءات
-              </th>
-            </tr>
-          </thead>
-          <tbody class="bg-white divide-y divide-gray-200">
-            <tr v-for="product in products" :key="product.id" class="hover:bg-gray-50">
-              <td class="px-6 py-4 whitespace-nowrap">
-                <div class="flex items-center">
-                  <div class="h-12 w-12 flex-shrink-0">
+        <!-- Products: Desktop Table -->
+        <div v-else class="hidden md:block bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+          <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+              <tr>
+                <th class="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase">المنتج</th>
+                <th class="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase">الكود</th>
+                <th class="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase">القسم</th>
+                <th class="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase">السعر</th>
+                <th class="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase">الحالة</th>
+                <th class="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">الإجراءات</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+              <tr v-for="product in products" :key="product.id" class="hover:bg-gray-50 transition-colors">
+                <td class="px-5 py-4">
+                  <div class="flex items-center gap-3">
                     <img
                       :src="product.image"
                       :alt="product.name"
-                      class="h-12 w-12 object-cover rounded"
+                      class="h-12 w-12 object-cover rounded-lg border border-gray-200"
                     />
-                  </div>
-                  <div class="mr-4">
-                    <div class="text-sm font-medium text-gray-900">
-                      {{ product.name }}
-                    </div>
-                    <div class="text-sm text-gray-500">
-                      رقم: {{ product.id }}
+                    <div>
+                      <div class="text-sm font-semibold text-gray-900">{{ product.name }}</div>
+                      <div class="text-xs text-gray-400">#{{ product.id }}</div>
                     </div>
                   </div>
+                </td>
+                <td class="px-5 py-4">
+                  <span class="text-sm font-mono text-gray-500 bg-gray-50 px-2 py-0.5 rounded">{{ product.code || '-' }}</span>
+                </td>
+                <td class="px-5 py-4">
+                  <span class="px-2.5 py-1 text-xs font-medium bg-purple-50 text-purple-700 rounded-full">
+                    {{ getCategoryLabel(product.category) }}
+                  </span>
+                </td>
+                <td class="px-5 py-4">
+                  <div class="text-sm font-semibold text-gray-900">{{ Number(product.price || 0).toFixed(2) }} ج.م</div>
+                  <div v-if="product.salePrice" class="text-xs text-green-600 font-medium">
+                    تخفيض: {{ Number(product.salePrice || 0).toFixed(2) }} ج.م
+                  </div>
+                </td>
+                <td class="px-5 py-4">
+                  <span
+                    class="px-2.5 py-1 text-xs font-medium rounded-full"
+                    :class="product.inStock !== false
+                      ? 'bg-green-50 text-green-700'
+                      : 'bg-red-50 text-red-700'"
+                  >
+                    {{ product.inStock !== false ? 'متوفر' : 'غير متوفر' }}
+                  </span>
+                </td>
+                <td class="px-5 py-4 text-left">
+                  <div class="flex items-center gap-2">
+                    <button @click="openEditForm(product)" class="admin-action-btn text-indigo-600 hover:bg-indigo-50">تعديل</button>
+                    <button @click="deleteProduct(product)" class="admin-action-btn text-red-600 hover:bg-red-50">حذف</button>
+                  </div>
+                </td>
+              </tr>
+              <tr v-if="products.length === 0">
+                <td colspan="6" class="px-6 py-16 text-center text-gray-400">
+                  لا توجد منتجات. اضغط "إضافة منتج" لإنشاء منتج جديد.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Products: Mobile Cards -->
+        <div v-if="!loading" class="md:hidden space-y-3">
+          <div
+            v-for="product in products"
+            :key="'m-' + product.id"
+            class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden"
+          >
+            <div class="flex items-center gap-3 p-4">
+              <img
+                :src="product.image"
+                :alt="product.name"
+                class="h-16 w-16 object-cover rounded-lg border border-gray-200 flex-shrink-0"
+              />
+              <div class="flex-1 min-w-0">
+                <div class="flex items-start justify-between gap-2">
+                  <h3 class="text-sm font-bold text-gray-900 truncate">{{ product.name }}</h3>
+                  <span
+                    class="px-2 py-0.5 text-[10px] font-medium rounded-full flex-shrink-0"
+                    :class="product.inStock !== false
+                      ? 'bg-green-50 text-green-700'
+                      : 'bg-red-50 text-red-700'"
+                  >
+                    {{ product.inStock !== false ? 'متوفر' : 'غير متوفر' }}
+                  </span>
                 </div>
-              </td>
-              <td class="px-6 py-4 whitespace-nowrap">
-                <span class="px-2 py-1 text-xs bg-gray-100 text-gray-800 rounded">
-                  {{ getCategoryLabel(product.category) }}
-                </span>
-              </td>
-              <td class="px-6 py-4 whitespace-nowrap">
-                <div class="text-sm text-gray-900">
-                  {{ Number(product.price || 0).toFixed(2) }} ج.م
+                <div class="flex items-center gap-2 mt-1">
+                  <span v-if="product.code" class="text-xs font-mono text-gray-400">{{ product.code }}</span>
+                  <span class="text-xs text-gray-300">|</span>
+                  <span class="text-xs text-purple-600 font-medium">{{ getCategoryLabel(product.category) }}</span>
                 </div>
-                <div v-if="product.salePrice" class="text-sm text-green-600">
-                  تخفيض: {{ Number(product.salePrice || 0).toFixed(2) }} ج.م
+                <div class="flex items-center gap-2 mt-1.5">
+                  <span class="text-sm font-bold text-gray-900">{{ Number(product.price || 0).toFixed(2) }} ج.م</span>
+                  <span v-if="product.salePrice" class="text-xs text-green-600 line-through">{{ Number(product.salePrice || 0).toFixed(2) }} ج.م</span>
                 </div>
-              </td>
-              <td class="px-6 py-4 whitespace-nowrap">
-                <span
-                  class="px-2 py-1 text-xs rounded-full"
-                  :class="product.inStock !== false
-                    ? 'bg-green-100 text-green-800'
-                    : 'bg-red-100 text-red-800'"
-                >
-                  {{ product.inStock !== false ? 'متوفر' : 'غير متوفر' }}
-                </span>
-              </td>
-              <td class="px-6 py-4 whitespace-nowrap text-left text-sm font-medium">
-                <button
-                  @click="openEditForm(product)"
-                  class="text-indigo-600 hover:text-indigo-900 ml-4"
-                >
-                  تعديل
-                </button>
-                <button
-                  @click="deleteProduct(product)"
-                  class="text-red-600 hover:text-red-900"
-                >
-                  حذف
-                </button>
-              </td>
-            </tr>
-            <tr v-if="products.length === 0">
-              <td colspan="5" class="px-6 py-12 text-center text-gray-500">
-                لا توجد منتجات. اضغط "إضافة منتج" لإنشاء منتج جديد.
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+              </div>
+            </div>
+            <div class="flex border-t border-gray-100">
+              <button
+                @click="openEditForm(product)"
+                class="flex-1 py-2.5 text-sm font-medium text-indigo-600 hover:bg-indigo-50 transition-colors text-center border-l border-gray-100"
+              >
+                تعديل
+              </button>
+              <button
+                @click="deleteProduct(product)"
+                class="flex-1 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors text-center"
+              >
+                حذف
+              </button>
+            </div>
+          </div>
+          <div v-if="products.length === 0" class="text-center py-16 text-gray-400 text-sm">
+            لا توجد منتجات. اضغط "إضافة منتج" لإنشاء منتج جديد.
+          </div>
+        </div>
       </div>
 
       <!-- ==================== ORDERS TAB ==================== -->
       <div v-if="activeTab === 'orders'">
         <!-- Error Message -->
-        <div v-if="ordersError" class="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+        <div v-if="ordersError" class="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
           {{ ordersError }}
         </div>
 
         <!-- Actions Bar -->
-        <div class="mb-6 flex justify-between items-center">
-          <h2 class="text-xl font-semibold text-gray-800">
-            الطلبات ({{ filteredOrders.length }} من {{ orders.length }})
+        <div class="mb-5 flex justify-between items-center">
+          <h2 class="text-lg sm:text-xl font-bold text-gray-800">
+            الطلبات <span class="text-gray-400 font-normal">({{ filteredOrders.length }} من {{ orders.length }})</span>
           </h2>
           <button
             @click="fetchOrders"
-            class="bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700 transition-colors"
+            class="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
           >
             تحديث
           </button>
         </div>
 
         <!-- Filters Bar -->
-        <div class="mb-6 bg-white rounded-lg shadow p-4">
-          <div class="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
-            <!-- Search -->
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">بحث</label>
+        <div class="mb-5 bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+          <div class="grid grid-cols-2 md:grid-cols-5 gap-3 items-end">
+            <div class="col-span-2 md:col-span-1">
+              <label class="block text-xs font-medium text-gray-500 mb-1">بحث</label>
               <input
                 v-model="orderFilters.search"
                 type="text"
                 placeholder="اسم، هاتف، رقم طلب..."
-                class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-500"
+                class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
               />
             </div>
-            <!-- Status Filter -->
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">الحالة</label>
+              <label class="block text-xs font-medium text-gray-500 mb-1">الحالة</label>
               <select
                 v-model="orderFilters.status"
-                class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-500"
+                class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
               >
                 <option value="">الكل</option>
                 <option v-for="status in orderStatuses" :key="status.value" :value="status.value">
@@ -956,29 +1053,26 @@ const formTitle = computed(() =>
                 </option>
               </select>
             </div>
-            <!-- Date From -->
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">من تاريخ</label>
+              <label class="block text-xs font-medium text-gray-500 mb-1">من تاريخ</label>
               <input
                 v-model="orderFilters.dateFrom"
                 type="date"
-                class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-500"
+                class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
               />
             </div>
-            <!-- Date To -->
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">إلى تاريخ</label>
+              <label class="block text-xs font-medium text-gray-500 mb-1">إلى تاريخ</label>
               <input
                 v-model="orderFilters.dateTo"
                 type="date"
-                class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-500"
+                class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
               />
             </div>
-            <!-- Reset Button -->
             <div>
               <button
                 @click="resetOrderFilters"
-                class="w-full px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors"
+                class="w-full px-4 py-2 text-sm bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors"
               >
                 إعادة تعيين
               </button>
@@ -987,12 +1081,12 @@ const formTitle = computed(() =>
         </div>
 
         <!-- Bulk Actions Bar -->
-        <div v-if="selectedOrders.length > 0" class="mb-4 bg-purple-50 border border-purple-200 rounded-lg p-4 flex items-center justify-between">
-          <span class="text-purple-800 font-medium">تم تحديد {{ selectedOrders.length }} طلب</span>
-          <div class="flex gap-2">
+        <div v-if="selectedOrders.length > 0" class="mb-4 bg-purple-50 border border-purple-200 rounded-xl p-3 sm:p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <span class="text-purple-800 font-medium text-sm">تم تحديد {{ selectedOrders.length }} طلب</span>
+          <div class="flex flex-wrap gap-2">
             <select
               @change="updateSelectedOrdersStatus($event.target.value); $event.target.value = ''"
-              class="px-3 py-1.5 text-sm border border-purple-300 rounded bg-white text-purple-800"
+              class="px-3 py-1.5 text-sm border border-purple-300 rounded-lg bg-white text-purple-800"
             >
               <option value="">تغيير الحالة...</option>
               <option v-for="status in orderStatuses" :key="status.value" :value="status.value">
@@ -1001,13 +1095,13 @@ const formTitle = computed(() =>
             </select>
             <button
               @click="deleteSelectedOrders"
-              class="px-3 py-1.5 text-sm bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+              class="px-3 py-1.5 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
             >
               حذف المحدد
             </button>
             <button
               @click="selectedOrders = []"
-              class="px-3 py-1.5 text-sm bg-gray-300 text-gray-700 rounded hover:bg-gray-400 transition-colors"
+              class="px-3 py-1.5 text-sm bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
             >
               إلغاء التحديد
             </button>
@@ -1015,136 +1109,140 @@ const formTitle = computed(() =>
         </div>
 
         <!-- Loading State -->
-        <div v-if="ordersLoading" class="text-center py-12">
-          <p class="text-gray-500">جاري تحميل الطلبات...</p>
+        <div v-if="ordersLoading" class="text-center py-16">
+          <div class="inline-block w-8 h-8 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin mb-3"></div>
+          <p class="text-gray-500 text-sm">جاري تحميل الطلبات...</p>
         </div>
 
-        <!-- Orders Table -->
-        <div v-else class="bg-white rounded-lg shadow overflow-hidden">
+        <!-- Orders: Desktop Table -->
+        <div v-if="!ordersLoading" class="hidden md:block bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
           <table class="min-w-full divide-y divide-gray-200">
             <thead class="bg-gray-50">
               <tr>
                 <th class="px-4 py-3 text-center">
-                  <input
-                    type="checkbox"
-                    :checked="isAllSelected"
-                    @change="toggleSelectAll"
-                    class="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded cursor-pointer"
-                  />
+                  <input type="checkbox" :checked="isAllSelected" @change="toggleSelectAll" class="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded cursor-pointer" />
                 </th>
-                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  رقم الطلب
-                </th>
-                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  العميل
-                </th>
-                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  المنتجات
-                </th>
-                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  الإجمالي
-                </th>
-                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  الحالة
-                </th>
-                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  التاريخ
-                </th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  الإجراءات
-                </th>
+                <th class="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase">رقم الطلب</th>
+                <th class="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase">العميل</th>
+                <th class="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase">المنتجات</th>
+                <th class="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase">الإجمالي</th>
+                <th class="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase">الحالة</th>
+                <th class="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase">التاريخ</th>
+                <th class="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">الإجراءات</th>
               </tr>
             </thead>
-            <tbody class="bg-white divide-y divide-gray-200">
-              <tr v-for="order in filteredOrders" :key="order.id" class="hover:bg-gray-50" :class="{ 'bg-purple-50': selectedOrders.includes(order.id) }">
+            <tbody class="divide-y divide-gray-100">
+              <tr v-for="order in filteredOrders" :key="order.id" class="hover:bg-gray-50 transition-colors" :class="{ 'bg-purple-50': selectedOrders.includes(order.id) }">
                 <td class="px-4 py-4 text-center">
-                  <input
-                    type="checkbox"
-                    :checked="selectedOrders.includes(order.id)"
-                    @change="toggleOrderSelection(order.id)"
-                    class="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded cursor-pointer"
-                  />
+                  <input type="checkbox" :checked="selectedOrders.includes(order.id)" @change="toggleOrderSelection(order.id)" class="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded cursor-pointer" />
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap">
-                  <span class="text-sm font-medium text-gray-900">{{ order.orderNumber }}</span>
+                <td class="px-5 py-4">
+                  <span class="text-sm font-semibold text-gray-900">{{ order.orderNumber }}</span>
                 </td>
-                <td class="px-6 py-4">
-                  <div class="text-sm text-gray-900">{{ order.delivery?.fullName }}</div>
-                  <div class="text-sm text-gray-500">{{ order.delivery?.phone }}</div>
+                <td class="px-5 py-4">
+                  <div class="text-sm font-medium text-gray-900">{{ order.delivery?.fullName }}</div>
+                  <div class="text-xs text-gray-400">{{ order.delivery?.phone }}</div>
                 </td>
-                <td class="px-6 py-4">
-                  <div class="text-sm text-gray-900">{{ order.items?.length || 0 }} منتج</div>
+                <td class="px-5 py-4">
+                  <span class="text-sm text-gray-600">{{ order.items?.length || 0 }} منتج</span>
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap">
-                  <span class="text-sm font-medium text-gray-900">{{ Number(order.total || 0).toFixed(2) }} ج.م</span>
-                  <span v-if="order.couponCode" class="block text-xs text-green-600">
-                    🎟️ {{ order.couponCode }}
-                  </span>
+                <td class="px-5 py-4">
+                  <span class="text-sm font-semibold text-gray-900">{{ Number(order.total || 0).toFixed(2) }} ج.م</span>
+                  <span v-if="order.couponCode" class="block text-xs text-green-600 mt-0.5">{{ order.couponCode }}</span>
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap">
-                  <select
-                    :value="order.status"
-                    @change="updateOrderStatus(order, $event.target.value)"
-                    :class="[
-                      'text-xs px-2 py-1 rounded-full border-0 cursor-pointer',
-                      getStatusInfo(order.status).color
-                    ]"
-                  >
-                    <option v-for="status in orderStatuses" :key="status.value" :value="status.value">
-                      {{ status.label }}
-                    </option>
+                <td class="px-5 py-4">
+                  <select :value="order.status" @change="updateOrderStatus(order, $event.target.value)" :class="['text-xs px-2.5 py-1 rounded-full border-0 cursor-pointer font-medium', getStatusInfo(order.status).color]">
+                    <option v-for="status in orderStatuses" :key="status.value" :value="status.value">{{ status.label }}</option>
                   </select>
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap">
-                  <span class="text-sm text-gray-500">{{ formatDate(order.createdAt) }}</span>
+                <td class="px-5 py-4">
+                  <span class="text-xs text-gray-400">{{ formatDate(order.createdAt) }}</span>
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap text-left text-sm font-medium">
-                  <button
-                    @click="viewOrder(order)"
-                    class="text-indigo-600 hover:text-indigo-900 ml-4"
-                  >
-                    عرض
-                  </button>
-                  <button
-                    @click="deleteOrder(order)"
-                    class="text-red-600 hover:text-red-900"
-                  >
-                    حذف
-                  </button>
+                <td class="px-5 py-4 text-left">
+                  <div class="flex items-center gap-2">
+                    <button @click="viewOrder(order)" class="admin-action-btn text-indigo-600 hover:bg-indigo-50">عرض</button>
+                    <button @click="deleteOrder(order)" class="admin-action-btn text-red-600 hover:bg-red-50">حذف</button>
+                  </div>
                 </td>
               </tr>
               <tr v-if="filteredOrders.length === 0">
-                <td colspan="8" class="px-6 py-12 text-center text-gray-500">
+                <td colspan="8" class="px-6 py-16 text-center text-gray-400">
                   {{ orders.length === 0 ? 'لا توجد طلبات حتى الآن.' : 'لا توجد نتائج مطابقة للفلتر.' }}
                 </td>
               </tr>
             </tbody>
           </table>
         </div>
+
+        <!-- Orders: Mobile Cards -->
+        <div v-if="!ordersLoading" class="md:hidden space-y-3">
+          <div
+            v-for="order in filteredOrders"
+            :key="'m-' + order.id"
+            class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden"
+            :class="{ 'ring-2 ring-purple-300': selectedOrders.includes(order.id) }"
+          >
+            <div class="p-4">
+              <!-- Top row: checkbox + order number + status -->
+              <div class="flex items-center justify-between mb-3">
+                <div class="flex items-center gap-2">
+                  <input type="checkbox" :checked="selectedOrders.includes(order.id)" @change="toggleOrderSelection(order.id)" class="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded cursor-pointer" />
+                  <span class="text-sm font-bold text-gray-900">{{ order.orderNumber }}</span>
+                </div>
+                <select :value="order.status" @change="updateOrderStatus(order, $event.target.value)" :class="['text-[11px] px-2 py-0.5 rounded-full border-0 cursor-pointer font-medium', getStatusInfo(order.status).color]">
+                  <option v-for="status in orderStatuses" :key="status.value" :value="status.value">{{ status.label }}</option>
+                </select>
+              </div>
+              <!-- Customer info -->
+              <div class="flex items-center justify-between text-sm mb-2">
+                <div>
+                  <span class="font-medium text-gray-900">{{ order.delivery?.fullName }}</span>
+                  <span class="text-gray-400 text-xs mr-2">{{ order.delivery?.phone }}</span>
+                </div>
+              </div>
+              <!-- Bottom row: items count + total + date -->
+              <div class="flex items-center justify-between text-xs text-gray-500">
+                <div class="flex items-center gap-3">
+                  <span>{{ order.items?.length || 0 }} منتج</span>
+                  <span class="font-bold text-sm text-gray-900">{{ Number(order.total || 0).toFixed(2) }} ج.م</span>
+                  <span v-if="order.couponCode" class="text-green-600">{{ order.couponCode }}</span>
+                </div>
+                <span>{{ formatDate(order.createdAt) }}</span>
+              </div>
+            </div>
+            <div class="flex border-t border-gray-100">
+              <button @click="viewOrder(order)" class="flex-1 py-2.5 text-sm font-medium text-indigo-600 hover:bg-indigo-50 transition-colors text-center border-l border-gray-100">عرض</button>
+              <button @click="deleteOrder(order)" class="flex-1 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors text-center">حذف</button>
+            </div>
+          </div>
+          <div v-if="filteredOrders.length === 0" class="text-center py-16 text-gray-400 text-sm">
+            {{ orders.length === 0 ? 'لا توجد طلبات حتى الآن.' : 'لا توجد نتائج مطابقة للفلتر.' }}
+          </div>
+        </div>
       </div>
 
       <!-- ==================== COUPONS TAB ==================== -->
       <div v-if="activeTab === 'coupons'">
         <!-- Error Message -->
-        <div v-if="couponsError" class="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+        <div v-if="couponsError" class="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
           {{ couponsError }}
         </div>
 
         <!-- Actions Bar -->
-        <div class="mb-6 flex justify-between items-center">
-          <h2 class="text-xl font-semibold text-gray-800">
-            الكوبونات ({{ coupons.length }})
+        <div class="mb-5 flex justify-between items-center">
+          <h2 class="text-lg sm:text-xl font-bold text-gray-800">
+            الكوبونات <span class="text-gray-400 font-normal">({{ coupons.length }})</span>
           </h2>
           <div class="flex gap-2">
             <button
               @click="fetchCoupons"
-              class="bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700 transition-colors"
+              class="px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
             >
               تحديث
             </button>
             <button
               @click="openNewCouponForm"
-              class="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700 transition-colors"
+              class="admin-btn-primary text-sm"
             >
               + إضافة كوبون
             </button>
@@ -1152,82 +1250,215 @@ const formTitle = computed(() =>
         </div>
 
         <!-- Loading State -->
-        <div v-if="couponsLoading" class="text-center py-12">
-          <p class="text-gray-500">جاري تحميل الكوبونات...</p>
+        <div v-if="couponsLoading" class="text-center py-16">
+          <div class="inline-block w-8 h-8 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin mb-3"></div>
+          <p class="text-gray-500 text-sm">جاري تحميل الكوبونات...</p>
         </div>
 
-        <!-- Coupons Table -->
-        <div v-else class="bg-white rounded-lg shadow overflow-hidden">
+        <!-- Coupons: Desktop Table -->
+        <div v-if="!couponsLoading" class="hidden md:block bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
           <table class="min-w-full divide-y divide-gray-200">
             <thead class="bg-gray-50">
               <tr>
-                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">الكود</th>
-                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">النوع</th>
-                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">القيمة</th>
-                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">الحد الأدنى</th>
-                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">الاستخدام</th>
-                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">الحالة</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">الإجراءات</th>
+                <th class="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase">الكود</th>
+                <th class="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase">النوع</th>
+                <th class="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase">القيمة</th>
+                <th class="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase">الحد الأدنى</th>
+                <th class="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase">الاستخدام</th>
+                <th class="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase">الحالة</th>
+                <th class="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">الإجراءات</th>
               </tr>
             </thead>
-            <tbody class="bg-white divide-y divide-gray-200">
-              <tr v-for="coupon in coupons" :key="coupon.id" class="hover:bg-gray-50">
-                <td class="px-6 py-4 whitespace-nowrap">
-                  <span class="text-sm font-mono font-bold text-purple-600 bg-purple-50 px-2 py-1 rounded">{{ coupon.code }}</span>
+            <tbody class="divide-y divide-gray-100">
+              <tr v-for="coupon in coupons" :key="coupon.id" class="hover:bg-gray-50 transition-colors">
+                <td class="px-5 py-4">
+                  <span class="text-sm font-mono font-bold text-purple-600 bg-purple-50 px-2.5 py-1 rounded-lg">{{ coupon.code }}</span>
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap">
-                  <span :class="[
-                    'px-2 py-1 text-xs rounded-full',
-                    coupon.type === 'percentage' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'
-                  ]">
+                <td class="px-5 py-4">
+                  <span :class="['px-2.5 py-1 text-xs font-medium rounded-full', coupon.type === 'percentage' ? 'bg-blue-50 text-blue-700' : 'bg-green-50 text-green-700']">
                     {{ coupon.type === 'percentage' ? 'نسبة مئوية' : 'مبلغ ثابت' }}
                   </span>
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  {{ coupon.type === 'percentage' ? `${coupon.value}%` : `${coupon.value} ج.م` }}
-                  <span v-if="coupon.max_discount && coupon.type === 'percentage'" class="text-gray-500 text-xs block">
-                    (أقصى: {{ coupon.max_discount }} ج.م)
-                  </span>
+                <td class="px-5 py-4 text-sm text-gray-900">
+                  <span class="font-semibold">{{ coupon.type === 'percentage' ? `${coupon.value}%` : `${coupon.value} ج.م` }}</span>
+                  <span v-if="coupon.max_discount && coupon.type === 'percentage'" class="text-gray-400 text-xs block">(أقصى: {{ coupon.max_discount }} ج.م)</span>
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {{ coupon.min_order ? `${coupon.min_order} ج.م` : '-' }}
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {{ coupon.used_count || 0 }} / {{ coupon.usage_limit || '∞' }}
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap">
-                  <button
-                    @click="toggleCouponStatus(coupon)"
-                    :class="[
-                      'px-2 py-1 text-xs rounded-full cursor-pointer',
-                      coupon.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                    ]"
-                  >
+                <td class="px-5 py-4 text-sm text-gray-500">{{ coupon.min_order ? `${coupon.min_order} ج.م` : '-' }}</td>
+                <td class="px-5 py-4 text-sm text-gray-500">{{ coupon.used_count || 0 }} / {{ coupon.usage_limit || '∞' }}</td>
+                <td class="px-5 py-4">
+                  <button @click="toggleCouponStatus(coupon)" :class="['px-2.5 py-1 text-xs font-medium rounded-full cursor-pointer transition-colors', coupon.is_active ? 'bg-green-50 text-green-700 hover:bg-green-100' : 'bg-red-50 text-red-700 hover:bg-red-100']">
                     {{ coupon.is_active ? 'فعال' : 'معطل' }}
                   </button>
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap text-left text-sm font-medium">
-                  <button
-                    @click="openEditCouponForm(coupon)"
-                    class="text-indigo-600 hover:text-indigo-900 ml-4"
-                  >
-                    تعديل
-                  </button>
-                  <button
-                    @click="deleteCoupon(coupon)"
-                    class="text-red-600 hover:text-red-900"
-                  >
-                    حذف
-                  </button>
+                <td class="px-5 py-4 text-left">
+                  <div class="flex items-center gap-2">
+                    <button @click="openEditCouponForm(coupon)" class="admin-action-btn text-indigo-600 hover:bg-indigo-50">تعديل</button>
+                    <button @click="deleteCoupon(coupon)" class="admin-action-btn text-red-600 hover:bg-red-50">حذف</button>
+                  </div>
                 </td>
               </tr>
               <tr v-if="coupons.length === 0">
-                <td colspan="7" class="px-6 py-12 text-center text-gray-500">
+                <td colspan="7" class="px-6 py-16 text-center text-gray-400">
                   لا توجد كوبونات. اضغط "إضافة كوبون" لإنشاء كوبون جديد.
                 </td>
               </tr>
             </tbody>
           </table>
+        </div>
+
+        <!-- Coupons: Mobile Cards -->
+        <div v-if="!couponsLoading" class="md:hidden space-y-3">
+          <div
+            v-for="coupon in coupons"
+            :key="'m-' + coupon.id"
+            class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden"
+          >
+            <div class="p-4">
+              <!-- Code + Status -->
+              <div class="flex items-center justify-between mb-3">
+                <span class="text-sm font-mono font-bold text-purple-600 bg-purple-50 px-2.5 py-1 rounded-lg">{{ coupon.code }}</span>
+                <button @click="toggleCouponStatus(coupon)" :class="['px-2.5 py-0.5 text-[11px] font-medium rounded-full cursor-pointer', coupon.is_active ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700']">
+                  {{ coupon.is_active ? 'فعال' : 'معطل' }}
+                </button>
+              </div>
+              <!-- Details grid -->
+              <div class="grid grid-cols-2 gap-2 text-sm">
+                <div>
+                  <span class="text-xs text-gray-400">النوع</span>
+                  <div>
+                    <span :class="['px-2 py-0.5 text-[11px] font-medium rounded-full', coupon.type === 'percentage' ? 'bg-blue-50 text-blue-700' : 'bg-green-50 text-green-700']">
+                      {{ coupon.type === 'percentage' ? 'نسبة مئوية' : 'مبلغ ثابت' }}
+                    </span>
+                  </div>
+                </div>
+                <div>
+                  <span class="text-xs text-gray-400">القيمة</span>
+                  <div class="font-bold text-gray-900">{{ coupon.type === 'percentage' ? `${coupon.value}%` : `${coupon.value} ج.م` }}</div>
+                  <div v-if="coupon.max_discount && coupon.type === 'percentage'" class="text-[11px] text-gray-400">(أقصى: {{ coupon.max_discount }} ج.م)</div>
+                </div>
+                <div>
+                  <span class="text-xs text-gray-400">الحد الأدنى</span>
+                  <div class="text-gray-700">{{ coupon.min_order ? `${coupon.min_order} ج.م` : '-' }}</div>
+                </div>
+                <div>
+                  <span class="text-xs text-gray-400">الاستخدام</span>
+                  <div class="text-gray-700">{{ coupon.used_count || 0 }} / {{ coupon.usage_limit || '∞' }}</div>
+                </div>
+              </div>
+            </div>
+            <div class="flex border-t border-gray-100">
+              <button @click="openEditCouponForm(coupon)" class="flex-1 py-2.5 text-sm font-medium text-indigo-600 hover:bg-indigo-50 transition-colors text-center border-l border-gray-100">تعديل</button>
+              <button @click="deleteCoupon(coupon)" class="flex-1 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors text-center">حذف</button>
+            </div>
+          </div>
+          <div v-if="coupons.length === 0" class="text-center py-16 text-gray-400 text-sm">
+            لا توجد كوبونات. اضغط "إضافة كوبون" لإنشاء كوبون جديد.
+          </div>
+        </div>
+      </div>
+
+      <!-- ==================== MIGRATIONS TAB ==================== -->
+      <div v-if="activeTab === 'migrations'">
+        <!-- Error Message -->
+        <div v-if="migrationsError" class="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+          {{ migrationsError }}
+        </div>
+
+        <!-- Actions Bar -->
+        <div class="mb-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+          <h2 class="text-lg sm:text-xl font-bold text-gray-800">
+            تحديثات قاعدة البيانات
+          </h2>
+          <div class="flex gap-2">
+            <button
+              @click="fetchMigrations"
+              :disabled="migrationsLoading"
+              class="px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium disabled:opacity-50"
+            >
+              تحديث الحالة
+            </button>
+            <button
+              @click="runMigrations"
+              :disabled="migrationRunning"
+              class="px-3 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium disabled:opacity-50"
+            >
+              {{ migrationRunning ? 'جاري التشغيل...' : 'تشغيل التحديثات' }}
+            </button>
+          </div>
+        </div>
+
+        <!-- Migration Report -->
+        <div v-if="migrationReport" class="mb-5 rounded-xl shadow-sm border overflow-hidden">
+          <div :class="[
+            'px-4 py-3 font-medium text-sm',
+            migrationReport.success
+              ? 'bg-green-50 border-b border-green-200 text-green-800'
+              : 'bg-red-50 border-b border-red-200 text-red-800'
+          ]">
+            {{ migrationReport.success ? 'تم تنفيذ التحديثات بنجاح' : 'فشل في تنفيذ التحديثات' }}
+          </div>
+          <div class="bg-gray-900 text-gray-100 p-4 font-mono text-xs sm:text-sm whitespace-pre-wrap overflow-x-auto" dir="ltr">{{ migrationReport.output || 'لا يوجد مخرجات' }}</div>
+        </div>
+
+        <!-- Loading State -->
+        <div v-if="migrationsLoading" class="text-center py-16">
+          <div class="inline-block w-8 h-8 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin mb-3"></div>
+          <p class="text-gray-500 text-sm">جاري تحميل حالة التحديثات...</p>
+        </div>
+
+        <!-- Migrations: Desktop Table -->
+        <div v-if="!migrationsLoading" class="hidden md:block bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+          <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+              <tr>
+                <th class="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase">الحالة</th>
+                <th class="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase">اسم التحديث</th>
+                <th class="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase">الدفعة</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+              <tr v-for="(migration, index) in migrations" :key="index" class="hover:bg-gray-50 transition-colors">
+                <td class="px-5 py-4">
+                  <span :class="['px-2.5 py-1 text-xs font-medium rounded-full', migration.ran ? 'bg-green-50 text-green-700' : 'bg-yellow-50 text-yellow-700']">
+                    {{ migration.ran ? 'تم التنفيذ' : 'في الانتظار' }}
+                  </span>
+                </td>
+                <td class="px-5 py-4">
+                  <span class="text-sm font-mono text-gray-900">{{ migration.migration }}</span>
+                </td>
+                <td class="px-5 py-4">
+                  <span class="text-sm text-gray-500">{{ migration.batch || '-' }}</span>
+                </td>
+              </tr>
+              <tr v-if="migrations.length === 0">
+                <td colspan="3" class="px-6 py-16 text-center text-gray-400">لا توجد تحديثات</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Migrations: Mobile Cards -->
+        <div v-if="!migrationsLoading" class="md:hidden space-y-2">
+          <div
+            v-for="(migration, index) in migrations"
+            :key="'m-' + index"
+            class="bg-white rounded-xl border border-gray-200 shadow-sm p-4 flex items-center justify-between gap-3"
+          >
+            <div class="flex-1 min-w-0">
+              <div class="text-xs font-mono text-gray-700 truncate">{{ migration.migration }}</div>
+              <div v-if="migration.batch" class="text-[11px] text-gray-400 mt-0.5">دفعة: {{ migration.batch }}</div>
+            </div>
+            <span :class="['px-2.5 py-1 text-[11px] font-medium rounded-full flex-shrink-0', migration.ran ? 'bg-green-50 text-green-700' : 'bg-yellow-50 text-yellow-700']">
+              {{ migration.ran ? 'تم التنفيذ' : 'في الانتظار' }}
+            </span>
+          </div>
+          <div v-if="migrations.length === 0" class="text-center py-16 text-gray-400 text-sm">لا توجد تحديثات</div>
+        </div>
+
+        <!-- Raw Output -->
+        <div v-if="migrationsRaw && migrations.length === 0" class="mt-5">
+          <h3 class="text-sm font-bold text-gray-800 mb-2">المخرجات الخام</h3>
+          <div class="bg-gray-900 text-gray-100 p-4 rounded-xl font-mono text-xs sm:text-sm whitespace-pre-wrap overflow-x-auto" dir="ltr">{{ migrationsRaw }}</div>
         </div>
       </div>
     </main>
@@ -1282,33 +1513,45 @@ const formTitle = computed(() =>
 
           <!-- Order Items -->
           <div>
-            <h4 class="font-medium text-gray-900 mb-3">المنتجات</h4>
-            <div class="border rounded-lg overflow-hidden">
-              <table class="min-w-full divide-y divide-gray-200">
-                <thead class="bg-gray-50">
-                  <tr>
-                    <th class="px-4 py-2 text-right text-xs font-medium text-gray-500">المنتج</th>
-                    <th class="px-4 py-2 text-right text-xs font-medium text-gray-500">التفاصيل</th>
-                    <th class="px-4 py-2 text-right text-xs font-medium text-gray-500">الكمية</th>
-                    <th class="px-4 py-2 text-right text-xs font-medium text-gray-500">السعر</th>
-                  </tr>
-                </thead>
-                <tbody class="divide-y divide-gray-200">
-                  <tr v-for="item in selectedOrder.items" :key="item.id">
-                    <td class="px-4 py-3">
-                      <div class="flex items-center gap-3">
-                        <img v-if="item.image" :src="item.image" class="w-12 h-12 object-cover rounded" />
-                        <span class="text-sm text-gray-900">{{ item.name }}</span>
+            <h4 class="font-medium text-gray-900 mb-3">المنتجات ({{ selectedOrder.items?.length || 0 }})</h4>
+            <div class="space-y-3">
+              <div v-for="item in selectedOrder.items" :key="item.id" class="border border-gray-200 rounded-lg p-4">
+                <div class="flex gap-4">
+                  <img v-if="item.image" :src="item.image" class="w-20 h-20 object-cover rounded-lg flex-shrink-0" />
+                  <div class="flex-1 min-w-0">
+                    <div class="flex justify-between items-start mb-2">
+                      <h5 class="text-sm font-bold text-gray-900">{{ item.name }}</h5>
+                      <span class="text-sm font-bold text-purple-700 whitespace-nowrap mr-2">{{ Number(item.price * item.quantity).toFixed(2) }} ج.م</span>
+                    </div>
+                    <div class="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+                      <div v-if="item.code">
+                        <span class="text-gray-500">الكود:</span>
+                        <span class="text-gray-900 font-mono font-medium mr-1">{{ item.code }}</span>
                       </div>
-                    </td>
-                    <td class="px-4 py-3 text-sm text-gray-500">
-                      {{ item.color }} / {{ Array.isArray(item.sizes) ? item.sizes.join(', ') : item.sizes }} / {{ item.height }}
-                    </td>
-                    <td class="px-4 py-3 text-sm text-gray-900">{{ item.quantity }}</td>
-                    <td class="px-4 py-3 text-sm text-gray-900">{{ Number(item.price * item.quantity).toFixed(2) }} ج.م</td>
-                  </tr>
-                </tbody>
-              </table>
+                      <div v-if="item.color">
+                        <span class="text-gray-500">اللون:</span>
+                        <span class="text-gray-900 mr-1">{{ item.color }}</span>
+                      </div>
+                      <div v-if="item.sizes && (Array.isArray(item.sizes) ? item.sizes.length : item.sizes)">
+                        <span class="text-gray-500">المقاس:</span>
+                        <span class="text-gray-900 mr-1">{{ Array.isArray(item.sizes) ? item.sizes.join(', ') : item.sizes }}</span>
+                      </div>
+                      <div v-if="item.height">
+                        <span class="text-gray-500">الطول:</span>
+                        <span class="text-gray-900 mr-1">{{ item.height }}</span>
+                      </div>
+                      <div>
+                        <span class="text-gray-500">الكمية:</span>
+                        <span class="text-gray-900 mr-1">{{ item.quantity }}</span>
+                      </div>
+                      <div>
+                        <span class="text-gray-500">سعر القطعة:</span>
+                        <span class="text-gray-900 mr-1">{{ Number(item.price).toFixed(2) }} ج.م</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -1371,6 +1614,19 @@ const formTitle = computed(() =>
         </div>
 
         <form @submit.prevent="saveProduct" class="p-6 space-y-4">
+          <!-- Code -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">
+              كود المنتج
+            </label>
+            <input
+              v-model="form.code"
+              type="text"
+              class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              placeholder="أدخل كود المنتج"
+            />
+          </div>
+
           <!-- Name -->
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">
@@ -1417,14 +1673,14 @@ const formTitle = computed(() =>
           <!-- Category -->
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">
-              التصنيف *
+              القسم *
             </label>
             <select
               v-model="form.category"
               required
               class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
             >
-              <option value="">اختر التصنيف</option>
+              <option value="">اختر القسم</option>
               <option v-for="cat in categories" :key="cat.value" :value="cat.value">
                 {{ cat.label }}
               </option>
@@ -1866,3 +2122,58 @@ const formTitle = computed(() =>
     </div>
   </div>
 </template>
+
+<style scoped>
+.admin-header {
+  background: linear-gradient(135deg, #5B3A8C 0%, #7C4DBC 50%, #9B6DD7 100%);
+  position: relative;
+  overflow: hidden;
+}
+.admin-header::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -20%;
+  width: 60%;
+  height: 200%;
+  background: radial-gradient(ellipse, rgba(255,255,255,0.08) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.admin-btn-primary {
+  background: linear-gradient(135deg, #5B3A8C 0%, #7C4DBC 100%);
+  color: white;
+  padding: 0.5rem 1.25rem;
+  border-radius: 0.75rem;
+  font-weight: 600;
+  transition: all 0.2s;
+  box-shadow: 0 2px 8px rgba(91, 58, 140, 0.3);
+}
+.admin-btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(91, 58, 140, 0.4);
+}
+.admin-btn-primary:active {
+  transform: translateY(0);
+}
+
+.admin-action-btn {
+  padding: 0.25rem 0.75rem;
+  border-radius: 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  transition: all 0.15s;
+}
+
+.border-b-3 {
+  border-bottom-width: 3px;
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+</style>

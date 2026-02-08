@@ -64,6 +64,19 @@ const fetchProduct = async () => {
 const selectedImage = ref(0)
 const selectedColor = ref()
 const selectedColorImage = ref(null)
+
+// Image modal
+const showImageModal = ref(false)
+
+const openImageModal = () => {
+  showImageModal.value = true
+  document.body.style.overflow = 'hidden'
+}
+
+const closeImageModal = () => {
+  showImageModal.value = false
+  document.body.style.overflow = ''
+}
 const selectedSizes = ref([])
 const selectedHeight = ref()
 const selectedWeight = ref()
@@ -165,11 +178,11 @@ const handleAddToCart = () => {
   })
 }
 
-const handleBuyNow = () => {
+const handleBuyNow = async () => {
   // Get the correct image - color image if available, otherwise default
   const cartImage = selectedColorImage.value || product.value.images?.[0] || product.value.image
 
-  addToCart({
+  await addToCart({
     id: product.value.id,
     name: product.value.name,
     price: product.value.salePrice,
@@ -181,7 +194,7 @@ const handleBuyNow = () => {
     quantity: quantity.value,
     hasSizesAvailable: product.value.sizes?.length > 0,
     hasColorsAvailable: product.value.colors?.length > 0
-  })
+  }, { openDrawer: false })
   router.push('/checkout')
 }
 
@@ -225,7 +238,7 @@ const handleShare = async () => {
       <!-- Product Images -->
       <div class="space-y-4 lg:sticky lg:top-24 order-1 lg:order-2">
         <!-- Main Image -->
-        <div class="aspect-[3/4] bg-gray-50 overflow-hidden rounded-lg">
+        <div class="aspect-[3/4] bg-gray-50 overflow-hidden rounded-lg cursor-pointer" @click="openImageModal">
           <img
             :src="selectedColorImage || product.images?.[selectedImage] || product.image"
             :alt="product.name"
@@ -457,6 +470,35 @@ const handleShare = async () => {
         </button>
       </div>
     </section> -->
+
+    <!-- Image Modal -->
+    <Teleport to="body">
+      <Transition name="modal">
+        <div
+          v-if="showImageModal"
+          class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90"
+          @click="closeImageModal"
+        >
+          <!-- Close Button -->
+          <button
+            @click="closeImageModal"
+            class="absolute top-4 right-4 text-white hover:text-gray-300 transition-colors z-10"
+          >
+            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+
+          <!-- Modal Image -->
+          <img
+            :src="selectedColorImage || product.images?.[selectedImage] || product.image"
+            :alt="product.name"
+            class="max-w-full max-h-full object-contain"
+            @click.stop
+          />
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
@@ -468,6 +510,17 @@ const handleShare = async () => {
 
 .fade-enter-from,
 .fade-leave-to {
+  opacity: 0;
+}
+
+/* Modal transitions */
+.modal-enter-active,
+.modal-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.modal-enter-from,
+.modal-leave-to {
   opacity: 0;
 }
 </style>

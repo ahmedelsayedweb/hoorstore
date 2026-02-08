@@ -54,4 +54,8 @@ $router->group(['prefix' => 'api'], function () use ($router) {
     $router->post('coupons', 'CouponController@store');
     $router->put('coupons/{id}', 'CouponController@update');
     $router->delete('coupons/{id}', 'CouponController@destroy');
+
+    // Migrations (Admin)
+    $router->post('migrate/run', 'MigrationController@run');
+    $router->get('migrate/status', 'MigrationController@status');
 });

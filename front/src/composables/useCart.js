@@ -25,7 +25,7 @@ const arraysEqual = (a, b) => {
 }
 
 export function useCart() {
-  const addToCart = async (product) => {
+  const addToCart = async (product, { openDrawer = true } = {}) => {
     try {
       // Ensure cartItems is an array
       if (!Array.isArray(cartItems.value)) {
@@ -64,7 +64,7 @@ export function useCart() {
         }
       }
 
-      isCartOpen.value = true
+      if (openDrawer) isCartOpen.value = true
     } catch (error) {
       console.error('Failed to add to cart:', error)
     }

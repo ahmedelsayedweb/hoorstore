@@ -145,6 +145,22 @@ export const shippingApi = {
   }
 }
 
+// Migrations API (Admin)
+export const migrateApi = {
+  async getStatus() {
+    const res = await fetch(`${API_URL}/migrate/status`)
+    return res.json()
+  },
+
+  async run() {
+    const res = await fetch(`${API_URL}/migrate/run`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    })
+    return res.json()
+  }
+}
+
 // Coupons API
 export const couponsApi = {
   // Validate coupon code

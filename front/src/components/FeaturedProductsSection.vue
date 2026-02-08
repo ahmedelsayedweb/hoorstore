@@ -34,7 +34,7 @@ const handleAddToCart = (productId) => {
     addToCart({
       id: product.id,
       name: product.name,
-      color: product.colors[0].name,
+      color: product.colors[0]?.name,
       sizes: [product.sizes[0]],
       price: product.salePrice || product.price,
       image: product.image,

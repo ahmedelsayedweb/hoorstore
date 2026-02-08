@@ -39,6 +39,7 @@ class ProductController extends Controller
     public function store(Request $request): JsonResponse
     {
         $this->validate($request, [
+            'code' => 'nullable|string|max:100',
             'name' => 'required|string|max:255',
             'price' => 'required|numeric|min:0',
             'salePrice' => 'nullable|numeric|min:0',
@@ -54,6 +55,7 @@ class ProductController extends Controller
         ]);
 
         $product = Product::create([
+            'code' => $request->input('code', ''),
             'name' => $request->input('name'),
             'price' => $request->input('price'),
             'salePrice' => $request->input('salePrice'),
@@ -83,6 +85,7 @@ class ProductController extends Controller
         }
 
         $this->validate($request, [
+            'code' => 'nullable|string|max:100',
             'name' => 'sometimes|string|max:255',
             'price' => 'sometimes|numeric|min:0',
             'salePrice' => 'nullable|numeric|min:0',
@@ -98,6 +101,7 @@ class ProductController extends Controller
         ]);
 
         $product->update($request->only([
+            'code',
             'name',
             'price',
             'salePrice',

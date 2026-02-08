@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Coupon;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\Product;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Carbon\Carbon;
@@ -107,9 +109,16 @@ class OrderController extends Controller
         ]);
 
         foreach ($request->input('items') as $item) {
+            $productCode = null;
+            if (!empty($item['productId'])) {
+                $product = Product::find($item['productId']);
+                $productCode = $product->code ?? null;
+            }
+
             OrderItem::create([
                 'order_id' => $order->id,
                 'product_id' => $item['productId'],
+                'code' => $productCode,
                 'name' => $item['name'],
                 'price' => $item['price'],
                 'image' => $item['image'] ?? null,
@@ -119,6 +128,14 @@ class OrderController extends Controller
                 'quantity' => $item['quantity'],
                 'added_at' => isset($item['addedAt']) ? $item['addedAt'] : Carbon::now(),
             ]);
+        }
+
+        // Increment coupon usage
+        if ($request->input('couponCode')) {
+            $coupon = Coupon::where('code', strtoupper($request->input('couponCode')))->first();
+            if ($coupon) {
+                $coupon->incrementUsage();
+            }
         }
 
         $order->load('items');
@@ -155,6 +172,9 @@ class OrderController extends Controller
             $num = $index + 1;
             $sizesText = is_array($item->sizes) ? implode(', ', $item->sizes) : $item->sizes;
             $text = "▫️ *{$num}. {$item->name}*\n";
+            if ($item->code) {
+                $text .= "   🏷️ الكود: {$item->code}\n";
+            }
             $text .= "   📏 المقاس: {$sizesText}\n";
             $text .= "   🎨 اللون: {$item->color}\n";
             if ($item->height) {
@@ -389,8 +409,9 @@ class OrderController extends Controller
 
         $itemsHtml = $order->items->map(function ($item) {
             $sizesText = is_array($item->sizes) ? implode(', ', $item->sizes) : $item->sizes;
+            $codeText = $item->code ? "<br><small style='color: #666;'>كود: {$item->code}</small>" : '';
             return "<tr>
-                <td style='padding: 10px; border-bottom: 1px solid #eee;'>{$item->name}</td>
+                <td style='padding: 10px; border-bottom: 1px solid #eee;'>{$item->name}{$codeText}</td>
                 <td style='padding: 10px; border-bottom: 1px solid #eee;'>{$item->color} / {$sizesText}</td>
                 <td style='padding: 10px; border-bottom: 1px solid #eee;'>{$item->quantity}</td>
                 <td style='padding: 10px; border-bottom: 1px solid #eee;'>ج.م{$item->price}</td>
@@ -531,6 +552,7 @@ class OrderController extends Controller
                 return [
                     'id' => $item->id,
                     'productId' => $item->product_id,
+                    'code' => $item->code,
                     'name' => $item->name,
                     'price' => $item->price,
                     'image' => $item->image,

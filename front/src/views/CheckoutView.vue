@@ -1700,7 +1700,7 @@ const continueShopping = () => {
                       class="w-full h-full object-cover"
                     />
                   </div>
-                  <span class="absolute -top-2 -right-2 w-5 h-5 bg-gray-500 text-white text-xs rounded-full flex items-center justify-center">
+                  <span class="absolute -top-2 -right-2 w-5 h-5 bg-primary text-white text-xs rounded-full flex items-center justify-center">
                     {{ item.quantity }}
                   </span>
                 </div>
