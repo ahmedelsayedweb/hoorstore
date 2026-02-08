@@ -7,6 +7,14 @@ import { ordersApi, couponsApi, migrateApi } from '../api/cart'
 const route = useRoute()
 const router = useRouter()
 
+// Helper to check if a URL is a video
+const videoExtensions = ['mp4', 'mov', 'avi', 'wmv', 'webm']
+const isVideo = (url) => {
+  if (!url) return false
+  const ext = url.split('.').pop()?.toLowerCase().split('?')[0]
+  return videoExtensions.includes(ext)
+}
+
 // Authentication check
 const isAuthenticated = ref(false)
 const ADMIN_USER = 'ahmed'
@@ -99,6 +107,27 @@ const migrationsLoading = ref(false)
 const migrationsError = ref(null)
 const migrationRunning = ref(false)
 const migrationReport = ref(null)
+
+// Cleanup state
+const cleanupRunning = ref(false)
+const cleanupReport = ref(null)
+
+// Run cleanup of unused files
+const runCleanup = async () => {
+  if (!confirm('هل أنت متأكد من حذف جميع الصور والفيديوهات غير المستخدمة؟ هذا الإجراء لا يمكن التراجع عنه.')) return
+
+  try {
+    cleanupRunning.value = true
+    cleanupReport.value = null
+    const data = await uploadApi.cleanupUnused()
+    cleanupReport.value = data
+  } catch (err) {
+    cleanupReport.value = { error: 'فشل في الاتصال بالسيرفر' }
+    console.error(err)
+  } finally {
+    cleanupRunning.value = false
+  }
+}
 
 // Fetch migration status
 const fetchMigrations = async () => {
@@ -500,7 +529,7 @@ const handleAlbumFileSelect = (event) => {
   const files = Array.from(event.target.files)
   files.forEach(file => {
     albumImages.value.push(file)
-    albumPreviews.value.push(URL.createObjectURL(file))
+    albumPreviews.value.push({ url: URL.createObjectURL(file), name: file.name })
   })
 }
 
@@ -901,7 +930,15 @@ const formTitle = computed(() =>
               <tr v-for="product in products" :key="product.id" class="hover:bg-gray-50 transition-colors">
                 <td class="px-5 py-4">
                   <div class="flex items-center gap-3">
+                    <video
+                      v-if="isVideo(product.image)"
+                      :src="product.image"
+                      class="h-12 w-12 object-cover rounded-lg border border-gray-200"
+                      muted
+                      playsinline
+                    />
                     <img
+                      v-else
                       :src="product.image"
                       :alt="product.name"
                       class="h-12 w-12 object-cover rounded-lg border border-gray-200"
@@ -960,7 +997,15 @@ const formTitle = computed(() =>
             class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden"
           >
             <div class="flex items-center gap-3 p-4">
+              <video
+                v-if="isVideo(product.image)"
+                :src="product.image"
+                class="h-16 w-16 object-cover rounded-lg border border-gray-200 flex-shrink-0"
+                muted
+                playsinline
+              />
               <img
+                v-else
                 :src="product.image"
                 :alt="product.name"
                 class="h-16 w-16 object-cover rounded-lg border border-gray-200 flex-shrink-0"
@@ -1460,6 +1505,69 @@ const formTitle = computed(() =>
           <h3 class="text-sm font-bold text-gray-800 mb-2">المخرجات الخام</h3>
           <div class="bg-gray-900 text-gray-100 p-4 rounded-xl font-mono text-xs sm:text-sm whitespace-pre-wrap overflow-x-auto" dir="ltr">{{ migrationsRaw }}</div>
         </div>
+
+        <!-- ==================== CLEANUP SECTION ==================== -->
+        <div class="mt-10 pt-8 border-t border-gray-200">
+          <div class="mb-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+            <div>
+              <h2 class="text-lg sm:text-xl font-bold text-gray-800">تنظيف الملفات غير المستخدمة</h2>
+              <p class="text-sm text-gray-500 mt-1">حذف الصور والفيديوهات المرفوعة التي لا تستخدمها أي منتجات</p>
+            </div>
+            <button
+              @click="runCleanup"
+              :disabled="cleanupRunning"
+              class="px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium disabled:opacity-50 flex items-center gap-2"
+            >
+              <svg v-if="cleanupRunning" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              {{ cleanupRunning ? 'جاري التنظيف...' : 'تنظيف الملفات' }}
+            </button>
+          </div>
+
+          <!-- Cleanup Report -->
+          <div v-if="cleanupReport" class="rounded-xl shadow-sm border overflow-hidden">
+            <div v-if="cleanupReport.error" class="px-4 py-3 bg-red-50 border-b border-red-200 text-red-800 font-medium text-sm">
+              {{ cleanupReport.error }}
+            </div>
+            <template v-else>
+              <div class="px-4 py-3 bg-green-50 border-b border-green-200 text-green-800 font-medium text-sm">
+                {{ cleanupReport.message }}
+              </div>
+              <div class="p-4 bg-white space-y-3">
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div class="bg-gray-50 rounded-lg p-3 text-center">
+                    <div class="text-2xl font-bold text-gray-900">{{ cleanupReport.total_files_on_disk }}</div>
+                    <div class="text-xs text-gray-500 mt-1">إجمالي الملفات</div>
+                  </div>
+                  <div class="bg-blue-50 rounded-lg p-3 text-center">
+                    <div class="text-2xl font-bold text-blue-700">{{ cleanupReport.used_files }}</div>
+                    <div class="text-xs text-blue-600 mt-1">ملفات مستخدمة</div>
+                  </div>
+                  <div class="bg-red-50 rounded-lg p-3 text-center">
+                    <div class="text-2xl font-bold text-red-700">{{ cleanupReport.deleted_count }}</div>
+                    <div class="text-xs text-red-600 mt-1">ملفات محذوفة</div>
+                  </div>
+                  <div class="bg-green-50 rounded-lg p-3 text-center">
+                    <div class="text-2xl font-bold text-green-700">{{ cleanupReport.freed_space }}</div>
+                    <div class="text-xs text-green-600 mt-1">مساحة محررة</div>
+                  </div>
+                </div>
+                <!-- Deleted files list -->
+                <div v-if="cleanupReport.deleted_files?.length > 0" class="mt-3">
+                  <h4 class="text-sm font-medium text-gray-700 mb-2">الملفات المحذوفة:</h4>
+                  <div class="bg-gray-900 text-gray-100 p-3 rounded-lg font-mono text-xs max-h-48 overflow-y-auto" dir="ltr">
+                    <div v-for="(file, i) in cleanupReport.deleted_files" :key="i">{{ file }}</div>
+                  </div>
+                </div>
+                <div v-if="cleanupReport.deleted_count === 0" class="text-center py-4 text-gray-500 text-sm">
+                  لا توجد ملفات غير مستخدمة - كل الملفات مرتبطة بمنتجات
+                </div>
+              </div>
+            </template>
+          </div>
+        </div>
       </div>
     </main>
 
@@ -1690,17 +1798,26 @@ const formTitle = computed(() =>
           <!-- Image Upload -->
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">
-              صورة المنتج الرئيسية {{ editingProduct ? '' : '*' }}
+              صورة/فيديو المنتج الرئيسي {{ editingProduct ? '' : '*' }}
             </label>
             <input
               type="file"
-              accept="image/*"
+              accept="image/*,video/mp4,video/webm,video/quicktime,video/avi,video/x-ms-wmv"
               @change="handleFileSelect"
               class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
             />
-            <!-- Image Preview -->
+            <!-- Preview -->
             <div v-if="imagePreview" class="mt-3">
+              <video
+                v-if="isVideo(imageFile?.name || imagePreview)"
+                :src="imagePreview"
+                class="h-32 w-32 object-cover rounded border"
+                muted
+                playsinline
+                controls
+              />
               <img
+                v-else
                 :src="imagePreview"
                 alt="معاينة الصورة"
                 class="h-32 w-32 object-cover rounded border"
@@ -1711,11 +1828,11 @@ const formTitle = computed(() =>
           <!-- Album Images -->
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">
-              ألبوم صور المنتج
+              ألبوم صور وفيديوهات المنتج
             </label>
             <input
               type="file"
-              accept="image/*"
+              accept="image/*,video/mp4,video/webm,video/quicktime,video/avi,video/x-ms-wmv"
               multiple
               @change="handleAlbumFileSelect"
               class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
@@ -1725,7 +1842,15 @@ const formTitle = computed(() =>
               <p class="text-sm text-gray-600 mb-2">الصور الحالية:</p>
               <div class="flex flex-wrap gap-2">
                 <div v-for="(img, index) in form.images" :key="'existing-' + index" class="relative">
+                  <video
+                    v-if="isVideo(img)"
+                    :src="img"
+                    class="h-20 w-20 object-cover rounded border"
+                    muted
+                    playsinline
+                  />
                   <img
+                    v-else
                     :src="img"
                     alt="صورة الألبوم"
                     class="h-20 w-20 object-cover rounded border"
@@ -1745,8 +1870,16 @@ const formTitle = computed(() =>
               <p class="text-sm text-gray-600 mb-2">صور جديدة:</p>
               <div class="flex flex-wrap gap-2">
                 <div v-for="(preview, index) in albumPreviews" :key="'new-' + index" class="relative">
+                  <video
+                    v-if="isVideo(preview.name)"
+                    :src="preview.url"
+                    class="h-20 w-20 object-cover rounded border"
+                    muted
+                    playsinline
+                  />
                   <img
-                    :src="preview"
+                    v-else
+                    :src="preview.url"
                     alt="معاينة"
                     class="h-20 w-20 object-cover rounded border"
                   />
@@ -1760,7 +1893,7 @@ const formTitle = computed(() =>
                 </div>
               </div>
             </div>
-            <p v-if="uploading" class="mt-2 text-sm text-purple-600">جاري رفع الصور...</p>
+            <p v-if="uploading" class="mt-2 text-sm text-purple-600">جاري رفع الملفات...</p>
           </div>
 
           <!-- Sizes -->

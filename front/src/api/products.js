@@ -49,7 +49,7 @@ export const productsApi = {
 }
 
 export const uploadApi = {
-  // Upload image
+  // Upload image/video
   async uploadImage(file) {
     const formData = new FormData()
     formData.append('image', file)
@@ -57,6 +57,15 @@ export const uploadApi = {
     const res = await fetch(`${API_URL}/upload/image`, {
       method: 'POST',
       body: formData
+    })
+    return res.json()
+  },
+
+  // Cleanup unused files
+  async cleanupUnused() {
+    const res = await fetch(`${API_URL}/upload/cleanup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
     })
     return res.json()
   }

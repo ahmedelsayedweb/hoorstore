@@ -10,6 +10,19 @@ const router = useRouter()
 const { addToCart } = useCart()
 const { t } = useLanguage()
 
+// Helper to check if a URL is a video
+const videoExtensions = ['mp4', 'mov', 'avi', 'wmv', 'webm']
+const isVideo = (url) => {
+  if (!url) return false
+  const ext = url.split('.').pop()?.toLowerCase().split('?')[0]
+  return videoExtensions.includes(ext)
+}
+
+// Get current media URL
+const getCurrentMedia = () => {
+  return selectedColorImage.value || product.value?.images?.[selectedImage.value] || product.value?.image
+}
+
 // Share notification
 const showShareNotification = ref(false)
 
@@ -254,9 +267,18 @@ const handleShare = async () => {
       <!-- Product Images -->
       <div class="space-y-4 lg:sticky lg:top-24 order-1 lg:order-2">
         <!-- Main Image -->
-        <div class="aspect-[3/4] bg-gray-50 overflow-hidden rounded-lg cursor-pointer" @click="openImageModal">
+        <div class="aspect-[3/4] bg-gray-50 overflow-hidden rounded-lg cursor-pointer" @click="!isVideo(getCurrentMedia()) && openImageModal()">
+          <video
+            v-if="isVideo(getCurrentMedia())"
+            :src="getCurrentMedia()"
+            class="w-full h-full object-cover"
+            controls
+            muted
+            playsinline
+          />
           <img
-            :src="selectedColorImage || product.images?.[selectedImage] || product.image"
+            v-else
+            :src="getCurrentMedia()"
             :alt="product.name"
             class="w-full h-full object-cover hover:scale-105 transition-transform duration-500"
           />
@@ -270,7 +292,8 @@ const handleShare = async () => {
             class="aspect-square bg-gray-50 overflow-hidden rounded-lg border-2 transition-all duration-300 hover:opacity-80"
             :class="selectedImage === index ? 'border-primary ring-2 ring-primary/20' : 'border-transparent'"
           >
-            <img :src="image" :alt="`${product.name} ${index + 1}`" class="w-full h-full object-cover" />
+            <video v-if="isVideo(image)" :src="image" class="w-full h-full object-cover" muted playsinline />
+            <img v-else :src="image" :alt="`${product.name} ${index + 1}`" class="w-full h-full object-cover" />
           </button>
         </div>
       </div>
@@ -527,10 +550,19 @@ const handleShare = async () => {
             </svg>
           </button>
 
-          <!-- Modal Image -->
+          <!-- Modal Image/Video -->
           <div class="flex-1 flex items-center justify-center p-4 min-h-0" @click.stop>
+            <video
+              v-if="isVideo(getCurrentMedia())"
+              :src="getCurrentMedia()"
+              class="max-w-full max-h-full object-contain"
+              controls
+              muted
+              playsinline
+            />
             <img
-              :src="selectedColorImage || product.images?.[selectedImage] || product.image"
+              v-else
+              :src="getCurrentMedia()"
               :alt="product.name"
               class="max-w-full max-h-full object-contain"
             />
@@ -545,7 +577,8 @@ const handleShare = async () => {
               class="w-16 h-16 flex-shrink-0 rounded-lg overflow-hidden border-2 transition-all duration-200"
               :class="selectedImage === index ? 'border-white opacity-100' : 'border-transparent opacity-50 hover:opacity-80'"
             >
-              <img :src="image" :alt="`${product.name} ${index + 1}`" class="w-full h-full object-cover" />
+              <video v-if="isVideo(image)" :src="image" class="w-full h-full object-cover" muted playsinline />
+              <img v-else :src="image" :alt="`${product.name} ${index + 1}`" class="w-full h-full object-cover" />
             </button>
           </div>
         </div>

@@ -27,6 +27,7 @@ $router->group(['prefix' => 'api'], function () use ($router) {
     $router->delete('products/{id}', 'ProductController@destroy');
     $router->post('upload/image', 'ProductController@uploadImage');
     $router->delete('upload/image', 'ProductController@deleteImage');
+    $router->post('upload/cleanup', 'ProductController@cleanupUnusedFiles');
 
     // Cart (Per Browser)
     $router->get('cart/{browserId}', 'CartController@index');

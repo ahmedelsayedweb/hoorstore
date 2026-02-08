@@ -7,6 +7,13 @@ import { productsApi } from '../api/products'
 const { t } = useI18n()
 const { cartItems, removeFromCart, updateQuantity, updateCartItem, cartTotal } = useCart()
 
+const videoExtensions = ['mp4', 'mov', 'avi', 'wmv', 'webm']
+const isVideo = (url) => {
+  if (!url) return false
+  const ext = url.split('.').pop()?.toLowerCase().split('?')[0]
+  return videoExtensions.includes(ext)
+}
+
 // Edit item modal state
 const editingItem = ref(null)
 const editForm = ref({
@@ -123,7 +130,8 @@ const saveEditedItem = async () => {
       </div>
 
       <div class="flex gap-4 mb-4">
-        <img :src="editForm.image || editingItem.image" :alt="editingItem.name" class="w-20 h-24 object-cover rounded" />
+        <video v-if="isVideo(editForm.image || editingItem.image)" :src="editForm.image || editingItem.image" class="w-20 h-24 object-cover rounded" muted playsinline />
+        <img v-else :src="editForm.image || editingItem.image" :alt="editingItem.name" class="w-20 h-24 object-cover rounded" />
         <div>
           <h4 class="font-medium text-gray-900">{{ editingItem.name }}</h4>
           <p class="text-sm text-gray-500">{{ editForm.color }}</p>
@@ -272,7 +280,8 @@ const saveEditedItem = async () => {
           <div class="col-span-6 flex gap-4">
             <!-- Image -->
             <div class="w-24 h-32 md:w-28 md:h-36 bg-gray-100 flex-shrink-0">
-              <img :src="item.image" :alt="item.name" class="w-full h-full object-cover" />
+              <video v-if="isVideo(item.image)" :src="item.image" class="w-full h-full object-cover" muted playsinline />
+              <img v-else :src="item.image" :alt="item.name" class="w-full h-full object-cover" />
             </div>
             <!-- Details -->
             <div class="flex flex-col justify-center">

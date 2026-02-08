@@ -4,6 +4,13 @@ import { useI18n } from 'vue-i18n'
 const { t } = useI18n()
 const emit = defineEmits(['add-to-cart'])
 
+const videoExtensions = ['mp4', 'mov', 'avi', 'wmv', 'webm']
+const isVideo = (url) => {
+  if (!url) return false
+  const ext = url.split('.').pop()?.toLowerCase().split('?')[0]
+  return videoExtensions.includes(ext)
+}
+
 const props = defineProps({
   id: {
     type: [String, Number],
@@ -50,7 +57,17 @@ const addToCart = (event) => {
   <a :href="`/collections/${id}`" class="group block no-underline ">
     <!-- Image Container -->
     <div class="relative aspect-[3/4] overflow-hidden bg-gray-100 mb-3 rounded-lg">
+      <video
+        v-if="isVideo(image)"
+        :src="image"
+        class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+        muted
+        playsinline
+        loop
+        autoplay
+      />
       <img
+        v-else
         :src="image"
         :alt="name"
         class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"

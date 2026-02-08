@@ -176,19 +176,23 @@ class ProductController extends Controller
     public function uploadImage(Request $request): JsonResponse
     {
         $this->validate($request, [
-            'image' => 'required|image|mimes:jpeg,png,jpg,gif,webp|max:2048',
+            'image' => 'required|file|mimes:jpeg,png,jpg,gif,webp,mp4,mov,avi,wmv,webm|max:20480',
         ]);
 
         if (!$request->hasFile('image')) {
-            return response()->json(['error' => 'No image file provided'], 400);
+            return response()->json(['error' => 'No file provided'], 400);
         }
 
         $file = $request->file('image');
-        $filename = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
+        $extension = strtolower($file->getClientOriginalExtension());
+        $filename = time() . '_' . uniqid() . '.' . $extension;
 
-        // Organize images in folders by date (year/month/day)
+        $videoExtensions = ['mp4', 'mov', 'avi', 'wmv', 'webm'];
+        $isVideo = in_array($extension, $videoExtensions);
+
+        // Organize files in folders by type and date (year/month/day)
         $datePath = date('Y/m/d');
-        $path = 'uploads/images/' . $datePath;
+        $path = 'uploads/' . ($isVideo ? 'videos' : 'images') . '/' . $datePath;
 
         // Create directory if it doesn't exist
         $fullPath = storage_path('app/public/' . $path);
@@ -202,10 +206,132 @@ class ProductController extends Controller
         $url = $baseUrl . '/storage/' . $path . '/' . $filename;
 
         return response()->json([
-            'message' => 'Image uploaded successfully',
+            'message' => ($isVideo ? 'Video' : 'Image') . ' uploaded successfully',
             'filename' => $filename,
             'url' => $url,
+            'type' => $isVideo ? 'video' : 'image',
         ], 201);
+    }
+
+    /**
+     * Cleanup unused uploaded files (images/videos not referenced by any product)
+     */
+    public function cleanupUnusedFiles(): JsonResponse
+    {
+        // 1. Collect all URLs referenced by products
+        $usedUrls = [];
+        $products = Product::all();
+
+        foreach ($products as $product) {
+            // Main image
+            if ($product->image) {
+                $usedUrls[] = $product->image;
+            }
+
+            // Album images
+            if ($product->images && is_array($product->images)) {
+                foreach ($product->images as $imageUrl) {
+                    $usedUrls[] = $imageUrl;
+                }
+            }
+
+            // Color images
+            if ($product->colors && is_array($product->colors)) {
+                foreach ($product->colors as $color) {
+                    if (is_array($color) && !empty($color['image'])) {
+                        $usedUrls[] = $color['image'];
+                    }
+                }
+            }
+        }
+
+        // 2. Extract relative paths from URLs
+        $usedPaths = [];
+        foreach ($usedUrls as $url) {
+            $pattern = '/\/storage\/(.+)$/';
+            if (preg_match($pattern, $url, $matches)) {
+                $usedPaths[] = $matches[1];
+            }
+        }
+
+        // 3. Scan all files on disk
+        $basePath = storage_path('app/public/uploads');
+        $allFiles = [];
+
+        if (File::isDirectory($basePath)) {
+            $iterator = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($basePath, \RecursiveDirectoryIterator::SKIP_DOTS)
+            );
+
+            foreach ($iterator as $file) {
+                if ($file->isFile()) {
+                    $relativePath = 'uploads' . str_replace($basePath, '', $file->getPathname());
+                    $relativePath = str_replace('\\', '/', $relativePath);
+                    $allFiles[] = $relativePath;
+                }
+            }
+        }
+
+        // 4. Find and delete unused files
+        $deleted = [];
+        $failed = [];
+        $totalSize = 0;
+
+        foreach ($allFiles as $filePath) {
+            if (!in_array($filePath, $usedPaths)) {
+                $fullPath = storage_path('app/public/' . $filePath);
+                $fileSize = File::size($fullPath);
+
+                if (File::delete($fullPath)) {
+                    $deleted[] = $filePath;
+                    $totalSize += $fileSize;
+                } else {
+                    $failed[] = $filePath;
+                }
+            }
+        }
+
+        // 5. Clean up empty directories
+        if (File::isDirectory($basePath)) {
+            $this->removeEmptyDirectories($basePath);
+        }
+
+        return response()->json([
+            'message' => 'تم تنظيف الملفات غير المستخدمة',
+            'total_files_on_disk' => count($allFiles),
+            'used_files' => count($usedPaths),
+            'deleted_count' => count($deleted),
+            'deleted_files' => $deleted,
+            'failed_count' => count($failed),
+            'freed_space' => $this->formatBytes($totalSize),
+        ]);
+    }
+
+    /**
+     * Remove empty directories recursively
+     */
+    private function removeEmptyDirectories($path)
+    {
+        $dirs = File::directories($path);
+        foreach ($dirs as $dir) {
+            $this->removeEmptyDirectories($dir);
+            if (count(File::files($dir)) === 0 && count(File::directories($dir)) === 0) {
+                File::deleteDirectory($dir);
+            }
+        }
+    }
+
+    /**
+     * Format bytes to human readable
+     */
+    private function formatBytes($bytes)
+    {
+        if ($bytes >= 1048576) {
+            return round($bytes / 1048576, 2) . ' MB';
+        } elseif ($bytes >= 1024) {
+            return round($bytes / 1024, 2) . ' KB';
+        }
+        return $bytes . ' B';
     }
 
     /**

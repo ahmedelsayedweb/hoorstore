@@ -4,6 +4,13 @@ import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
 const { cartItems, isCartOpen, closeCart, removeFromCart, updateQuantity, cartTotal } = useCart()
+
+const videoExtensions = ['mp4', 'mov', 'avi', 'wmv', 'webm']
+const isVideo = (url) => {
+  if (!url) return false
+  const ext = url.split('.').pop()?.toLowerCase().split('?')[0]
+  return videoExtensions.includes(ext)
+}
 </script>
 
 <template>
@@ -58,7 +65,8 @@ const { cartItems, isCartOpen, closeCart, removeFromCart, updateQuantity, cartTo
           >
             <!-- Product Image -->
             <div class="w-20 h-24 bg-gray-100 flex-shrink-0">
-              <img :src="item.image" :alt="item.name" class="w-full h-full object-cover" />
+              <video v-if="isVideo(item.image)" :src="item.image" class="w-full h-full object-cover" muted playsinline />
+              <img v-else :src="item.image" :alt="item.name" class="w-full h-full object-cover" />
             </div>
 
             <!-- Product Details -->
