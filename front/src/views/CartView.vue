@@ -287,7 +287,7 @@ const saveEditedItem = async () => {
           </div>
 
           <!-- Quantity -->
-          <div class="col-span-3 flex items-center justify-start md:justify-center gap-3">
+          <div class="col-span-3 flex items-center justify-start md:justify-center gap-1">
             <div class="flex items-center border border-gray-300">
               <button
                 @click="updateQuantity(item.id, item.quantity - 1)"

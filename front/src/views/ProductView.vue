@@ -68,7 +68,11 @@ const selectedColorImage = ref(null)
 // Image modal
 const showImageModal = ref(false)
 
-const openImageModal = () => {
+const openImageModal = (index) => {
+  if (index !== undefined) {
+    selectedImage.value = index
+    selectedColorImage.value = null
+  }
   showImageModal.value = true
   document.body.style.overflow = 'hidden'
 }
@@ -76,6 +80,18 @@ const openImageModal = () => {
 const closeImageModal = () => {
   showImageModal.value = false
   document.body.style.overflow = ''
+}
+
+const prevImage = () => {
+  if (!product.value?.images?.length) return
+  selectedColorImage.value = null
+  selectedImage.value = (selectedImage.value - 1 + product.value.images.length) % product.value.images.length
+}
+
+const nextImage = () => {
+  if (!product.value?.images?.length) return
+  selectedColorImage.value = null
+  selectedImage.value = (selectedImage.value + 1) % product.value.images.length
 }
 const selectedSizes = ref([])
 const selectedHeight = ref()
@@ -250,7 +266,7 @@ const handleShare = async () => {
           <button
             v-for="(image, index) in product.images"
             :key="index"
-            @click="selectedImage = index"
+            @click="openImageModal(index)"
             class="aspect-square bg-gray-50 overflow-hidden rounded-lg border-2 transition-all duration-300 hover:opacity-80"
             :class="selectedImage === index ? 'border-primary ring-2 ring-primary/20' : 'border-transparent'"
           >
@@ -476,7 +492,7 @@ const handleShare = async () => {
       <Transition name="modal">
         <div
           v-if="showImageModal"
-          class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90"
+          class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/90"
           @click="closeImageModal"
         >
           <!-- Close Button -->
@@ -489,13 +505,49 @@ const handleShare = async () => {
             </svg>
           </button>
 
+          <!-- Prev Button -->
+          <button
+            v-if="product.images?.length > 1"
+            @click.stop="prevImage"
+            class="absolute left-3 top-1/2 -translate-y-1/2 text-white/70 hover:text-white bg-black/40 hover:bg-black/60 rounded-full p-2 transition-all z-10"
+          >
+            <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+
+          <!-- Next Button -->
+          <button
+            v-if="product.images?.length > 1"
+            @click.stop="nextImage"
+            class="absolute right-3 top-1/2 -translate-y-1/2 text-white/70 hover:text-white bg-black/40 hover:bg-black/60 rounded-full p-2 transition-all z-10"
+          >
+            <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+
           <!-- Modal Image -->
-          <img
-            :src="selectedColorImage || product.images?.[selectedImage] || product.image"
-            :alt="product.name"
-            class="max-w-full max-h-full object-contain"
-            @click.stop
-          />
+          <div class="flex-1 flex items-center justify-center p-4 min-h-0" @click.stop>
+            <img
+              :src="selectedColorImage || product.images?.[selectedImage] || product.image"
+              :alt="product.name"
+              class="max-w-full max-h-full object-contain"
+            />
+          </div>
+
+          <!-- Thumbnail Strip -->
+          <div v-if="product.images?.length > 1" class="flex gap-2 pb-4 px-4" @click.stop>
+            <button
+              v-for="(image, index) in product.images"
+              :key="index"
+              @click="selectedColorImage = null; selectedImage = index"
+              class="w-16 h-16 flex-shrink-0 rounded-lg overflow-hidden border-2 transition-all duration-200"
+              :class="selectedImage === index ? 'border-white opacity-100' : 'border-transparent opacity-50 hover:opacity-80'"
+            >
+              <img :src="image" :alt="`${product.name} ${index + 1}`" class="w-full h-full object-cover" />
+            </button>
+          </div>
         </div>
       </Transition>
     </Teleport>
