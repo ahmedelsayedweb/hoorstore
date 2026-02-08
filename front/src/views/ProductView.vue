@@ -18,9 +18,23 @@ const isVideo = (url) => {
   return videoExtensions.includes(ext)
 }
 
-// Get current media URL
+// Separate images from videos
+const productImages = ref([])
+const productVideos = ref([])
+
+const splitMedia = () => {
+  const allMedia = product.value?.images || []
+  productImages.value = allMedia.filter(url => !isVideo(url))
+  productVideos.value = allMedia.filter(url => isVideo(url))
+  // Fallback: if no images but has main image
+  if (productImages.value.length === 0 && product.value?.image && !isVideo(product.value.image)) {
+    productImages.value = [product.value.image]
+  }
+}
+
+// Get current media URL (images only)
 const getCurrentMedia = () => {
-  return selectedColorImage.value || product.value?.images?.[selectedImage.value] || product.value?.image
+  return selectedColorImage.value || productImages.value?.[selectedImage.value] || product.value?.image
 }
 
 // Share notification
@@ -57,6 +71,9 @@ const fetchProduct = async () => {
         ? data.description
         : { title: data.name, details: [], note: '', footer: data.description || '' }
     }
+
+    // Split media into images and videos
+    splitMedia()
 
     // Set default selected values to first option
     if (product.value.colors?.length) {
@@ -96,15 +113,15 @@ const closeImageModal = () => {
 }
 
 const prevImage = () => {
-  if (!product.value?.images?.length) return
+  if (!productImages.value.length) return
   selectedColorImage.value = null
-  selectedImage.value = (selectedImage.value - 1 + product.value.images.length) % product.value.images.length
+  selectedImage.value = (selectedImage.value - 1 + productImages.value.length) % productImages.value.length
 }
 
 const nextImage = () => {
-  if (!product.value?.images?.length) return
+  if (!productImages.value.length) return
   selectedColorImage.value = null
-  selectedImage.value = (selectedImage.value + 1) % product.value.images.length
+  selectedImage.value = (selectedImage.value + 1) % productImages.value.length
 }
 const selectedSizes = ref([])
 const selectedHeight = ref()
@@ -267,33 +284,41 @@ const handleShare = async () => {
       <!-- Product Images -->
       <div class="space-y-4 lg:sticky lg:top-24 order-1 lg:order-2">
         <!-- Main Image -->
-        <div class="aspect-[3/4] bg-gray-50 overflow-hidden rounded-lg cursor-pointer" @click="!isVideo(getCurrentMedia()) && openImageModal()">
-          <video
-            v-if="isVideo(getCurrentMedia())"
-            :src="getCurrentMedia()"
-            class="w-full h-full object-cover"
-            controls
-            muted
-            playsinline
-          />
+        <div class="aspect-[3/4] bg-gray-50 overflow-hidden rounded-lg cursor-pointer" @click="openImageModal()">
           <img
-            v-else
             :src="getCurrentMedia()"
             :alt="product.name"
             class="w-full h-full object-cover hover:scale-105 transition-transform duration-500"
           />
         </div>
-        <!-- Thumbnail Gallery -->
-        <div v-if="product.images?.length > 1" class="grid grid-cols-4 gap-3">
+        <!-- Thumbnail Gallery (images only) -->
+        <div v-if="productImages.length > 1" class="grid grid-cols-4 gap-3">
           <button
-            v-for="(image, index) in product.images"
+            v-for="(image, index) in productImages"
             :key="index"
             @click="openImageModal(index)"
             class="aspect-square bg-gray-50 overflow-hidden rounded-lg border-2 transition-all duration-300 hover:opacity-80"
             :class="selectedImage === index ? 'border-primary ring-2 ring-primary/20' : 'border-transparent'"
           >
-            <video v-if="isVideo(image)" :src="image" class="w-full h-full object-cover" muted playsinline />
-            <img v-else :src="image" :alt="`${product.name} ${index + 1}`" class="w-full h-full object-cover" />
+            <img :src="image" :alt="`${product.name} ${index + 1}`" class="w-full h-full object-cover" />
+          </button>
+        </div>
+        <!-- Videos Section -->
+        <div v-if="productVideos.length" class="grid grid-cols-4 gap-3">
+          <button
+            v-for="(video, index) in productVideos"
+            :key="index"
+            @click="openImageModal(index)"
+            class="aspect-square bg-gray-50 overflow-hidden rounded-lg border-2 transition-all duration-300 hover:opacity-80"
+            :class="selectedImage === index ? 'border-primary ring-2 ring-primary/20' : 'border-transparent'"
+          >
+            <video
+              :src="video"
+              class="w-full h-full object-cover"
+              controls
+              muted
+              playsinline
+            />
           </button>
         </div>
       </div>
@@ -530,7 +555,7 @@ const handleShare = async () => {
 
           <!-- Prev Button -->
           <button
-            v-if="product.images?.length > 1"
+            v-if="productImages.length > 1"
             @click.stop="prevImage"
             class="absolute left-3 top-1/2 -translate-y-1/2 text-white/70 hover:text-white bg-black/40 hover:bg-black/60 rounded-full p-2 transition-all z-10"
           >
@@ -541,7 +566,7 @@ const handleShare = async () => {
 
           <!-- Next Button -->
           <button
-            v-if="product.images?.length > 1"
+            v-if="productImages.length > 1"
             @click.stop="nextImage"
             class="absolute right-3 top-1/2 -translate-y-1/2 text-white/70 hover:text-white bg-black/40 hover:bg-black/60 rounded-full p-2 transition-all z-10"
           >
@@ -550,18 +575,9 @@ const handleShare = async () => {
             </svg>
           </button>
 
-          <!-- Modal Image/Video -->
+          <!-- Modal Image -->
           <div class="flex-1 flex items-center justify-center p-4 min-h-0" @click.stop>
-            <video
-              v-if="isVideo(getCurrentMedia())"
-              :src="getCurrentMedia()"
-              class="max-w-full max-h-full object-contain"
-              controls
-              muted
-              playsinline
-            />
             <img
-              v-else
               :src="getCurrentMedia()"
               :alt="product.name"
               class="max-w-full max-h-full object-contain"
@@ -569,16 +585,15 @@ const handleShare = async () => {
           </div>
 
           <!-- Thumbnail Strip -->
-          <div v-if="product.images?.length > 1" class="flex gap-2 pb-4 px-4" @click.stop>
+          <div v-if="productImages.length > 1" class="flex gap-2 pb-4 px-4" @click.stop>
             <button
-              v-for="(image, index) in product.images"
+              v-for="(image, index) in productImages"
               :key="index"
               @click="selectedColorImage = null; selectedImage = index"
               class="w-16 h-16 flex-shrink-0 rounded-lg overflow-hidden border-2 transition-all duration-200"
               :class="selectedImage === index ? 'border-white opacity-100' : 'border-transparent opacity-50 hover:opacity-80'"
             >
-              <video v-if="isVideo(image)" :src="image" class="w-full h-full object-cover" muted playsinline />
-              <img v-else :src="image" :alt="`${product.name} ${index + 1}`" class="w-full h-full object-cover" />
+              <img :src="image" :alt="`${product.name} ${index + 1}`" class="w-full h-full object-cover" />
             </button>
           </div>
         </div>

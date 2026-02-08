@@ -176,6 +176,7 @@ const couponForm = ref({
   min_order: '',
   max_discount: '',
   usage_limit: '',
+  one_per_device: false,
   start_date: '',
   end_date: '',
   is_active: true
@@ -205,6 +206,7 @@ const openNewCouponForm = () => {
     min_order: '',
     max_discount: '',
     usage_limit: '',
+    one_per_device: false,
     start_date: '',
     end_date: '',
     is_active: true
@@ -222,6 +224,7 @@ const openEditCouponForm = (coupon) => {
     min_order: coupon.min_order || '',
     max_discount: coupon.max_discount || '',
     usage_limit: coupon.usage_limit || '',
+    one_per_device: coupon.one_per_device || false,
     start_date: coupon.start_date ? coupon.start_date.split('T')[0] : '',
     end_date: coupon.end_date ? coupon.end_date.split('T')[0] : '',
     is_active: coupon.is_active
@@ -246,6 +249,7 @@ const saveCoupon = async () => {
       min_order: couponForm.value.min_order ? parseFloat(couponForm.value.min_order) : null,
       max_discount: couponForm.value.max_discount ? parseFloat(couponForm.value.max_discount) : null,
       usage_limit: couponForm.value.usage_limit ? parseInt(couponForm.value.usage_limit) : null,
+      one_per_device: couponForm.value.one_per_device,
       start_date: couponForm.value.start_date || null,
       end_date: couponForm.value.end_date || null,
       is_active: couponForm.value.is_active
@@ -1329,7 +1333,10 @@ const formTitle = computed(() =>
                   <span v-if="coupon.max_discount && coupon.type === 'percentage'" class="text-gray-400 text-xs block">(أقصى: {{ coupon.max_discount }} ج.م)</span>
                 </td>
                 <td class="px-5 py-4 text-sm text-gray-500">{{ coupon.min_order ? `${coupon.min_order} ج.م` : '-' }}</td>
-                <td class="px-5 py-4 text-sm text-gray-500">{{ coupon.used_count || 0 }} / {{ coupon.usage_limit || '∞' }}</td>
+                <td class="px-5 py-4 text-sm text-gray-500">
+                  {{ coupon.used_count || 0 }} / {{ coupon.usage_limit || '∞' }}
+                  <span v-if="coupon.one_per_device" class="block text-[11px] text-orange-600 mt-0.5">استخدام واحد/جهاز</span>
+                </td>
                 <td class="px-5 py-4">
                   <button @click="toggleCouponStatus(coupon)" :class="['px-2.5 py-1 text-xs font-medium rounded-full cursor-pointer transition-colors', coupon.is_active ? 'bg-green-50 text-green-700 hover:bg-green-100' : 'bg-red-50 text-red-700 hover:bg-red-100']">
                     {{ coupon.is_active ? 'فعال' : 'معطل' }}
@@ -1388,6 +1395,7 @@ const formTitle = computed(() =>
                 <div>
                   <span class="text-xs text-gray-400">الاستخدام</span>
                   <div class="text-gray-700">{{ coupon.used_count || 0 }} / {{ coupon.usage_limit || '∞' }}</div>
+                  <span v-if="coupon.one_per_device" class="text-[11px] text-orange-600">استخدام واحد/جهاز</span>
                 </div>
               </div>
             </div>
@@ -2198,6 +2206,19 @@ const formTitle = computed(() =>
               class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-500"
               placeholder="100"
             />
+          </div>
+
+          <!-- One Per Device -->
+          <div class="flex items-center">
+            <input
+              v-model="couponForm.one_per_device"
+              type="checkbox"
+              id="couponOnePerDevice"
+              class="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
+            />
+            <label for="couponOnePerDevice" class="mr-2 text-sm text-gray-700">
+              استخدام واحد لكل جهاز
+            </label>
           </div>
 
           <!-- Date Range -->

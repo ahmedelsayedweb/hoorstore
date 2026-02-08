@@ -85,7 +85,7 @@ export const ordersApi = {
     const res = await fetch(`${API_URL}/orders`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(orderData)
+      body: JSON.stringify({ ...orderData, browserId: getBrowserId() })
     })
     const data = await res.json()
 
@@ -165,10 +165,11 @@ export const migrateApi = {
 export const couponsApi = {
   // Validate coupon code
   async validate(code, subtotal) {
+    const browserId = getBrowserId()
     const res = await fetch(`${API_URL}/coupons/validate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code, subtotal })
+      body: JSON.stringify({ code, subtotal, browser_id: browserId })
     })
     return res.json()
   },

@@ -15,6 +15,7 @@ class Coupon extends Model
         'max_discount',
         'usage_limit',
         'used_count',
+        'one_per_device',
         'start_date',
         'end_date',
         'is_active',
@@ -27,14 +28,25 @@ class Coupon extends Model
         'usage_limit' => 'integer',
         'used_count' => 'integer',
         'is_active' => 'boolean',
+        'one_per_device' => 'boolean',
         'start_date' => 'date',
         'end_date' => 'date',
     ];
 
+    public function usages()
+    {
+        return $this->hasMany(CouponUsage::class);
+    }
+
+    public function hasBeenUsedByDevice($browserId)
+    {
+        return $this->usages()->where('browser_id', $browserId)->exists();
+    }
+
     /**
      * Check if coupon is valid
      */
-    public function isValid($orderTotal = 0)
+    public function isValid($orderTotal = 0, $browserId = null)
     {
         // Check if active
         if (!$this->is_active) {
@@ -44,6 +56,11 @@ class Coupon extends Model
         // Check usage limit
         if ($this->usage_limit && $this->used_count >= $this->usage_limit) {
             return ['valid' => false, 'message' => 'تم استنفاد الكوبون'];
+        }
+
+        // Check one per device
+        if ($this->one_per_device && $browserId && $this->hasBeenUsedByDevice($browserId)) {
+            return ['valid' => false, 'message' => 'تم استخدام هذا الكوبون من قبل على هذا الجهاز'];
         }
 
         // Check date range

@@ -16,10 +16,12 @@ class CouponController extends Controller
         $this->validate($request, [
             'code' => 'required|string',
             'subtotal' => 'required|numeric|min:0',
+            'browser_id' => 'nullable|string',
         ]);
 
         $code = strtoupper(trim($request->input('code')));
         $subtotal = $request->input('subtotal');
+        $browserId = $request->input('browser_id');
 
         $coupon = Coupon::where('code', $code)->first();
 
@@ -30,7 +32,7 @@ class CouponController extends Controller
             ], 404);
         }
 
-        $validation = $coupon->isValid($subtotal);
+        $validation = $coupon->isValid($subtotal, $browserId);
 
         if (!$validation['valid']) {
             return response()->json([
@@ -74,6 +76,7 @@ class CouponController extends Controller
             'min_order' => 'nullable|numeric|min:0',
             'max_discount' => 'nullable|numeric|min:0',
             'usage_limit' => 'nullable|integer|min:1',
+            'one_per_device' => 'boolean',
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date|after_or_equal:start_date',
             'is_active' => 'boolean',
@@ -86,6 +89,7 @@ class CouponController extends Controller
             'min_order' => $request->input('min_order'),
             'max_discount' => $request->input('max_discount'),
             'usage_limit' => $request->input('usage_limit'),
+            'one_per_device' => $request->input('one_per_device', false),
             'start_date' => $request->input('start_date'),
             'end_date' => $request->input('end_date'),
             'is_active' => $request->input('is_active', true),
@@ -115,6 +119,7 @@ class CouponController extends Controller
             'min_order' => 'nullable|numeric|min:0',
             'max_discount' => 'nullable|numeric|min:0',
             'usage_limit' => 'nullable|integer|min:1',
+            'one_per_device' => 'boolean',
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date',
             'is_active' => 'boolean',

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Coupon;
+use App\Models\CouponUsage;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
@@ -83,6 +84,7 @@ class OrderController extends Controller
             'total' => 'required|numeric|min:0',
             'couponCode' => 'nullable|string',
             'discountAmount' => 'nullable|numeric|min:0',
+            'browserId' => 'nullable|string',
         ]);
 
         $delivery = $request->input('delivery');
@@ -130,11 +132,29 @@ class OrderController extends Controller
             ]);
         }
 
-        // Increment coupon usage
+        // Increment coupon usage and record device usage
         if ($request->input('couponCode')) {
             $coupon = Coupon::where('code', strtoupper($request->input('couponCode')))->first();
             if ($coupon) {
+                $browserId = $request->input('browserId');
+
+                // Check one_per_device before processing
+                if ($coupon->one_per_device && $browserId && $coupon->hasBeenUsedByDevice($browserId)) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'تم استخدام هذا الكوبون من قبل على هذا الجهاز',
+                    ], 400);
+                }
+
                 $coupon->incrementUsage();
+
+                // Record device usage
+                if ($browserId) {
+                    CouponUsage::firstOrCreate([
+                        'coupon_id' => $coupon->id,
+                        'browser_id' => $browserId,
+                    ]);
+                }
             }
         }
 
