@@ -452,10 +452,15 @@ const saving = ref(false)
 const uploading = ref(false)
 const imagePreview = ref(null)
 const imageFile = ref(null)
+const imageInputMode = ref('upload') // 'upload' or 'link'
+const imageLink = ref('')
 
 // Album images state
 const albumImages = ref([])
 const albumPreviews = ref([])
+const albumInputMode = ref('upload') // 'upload' or 'link'
+const albumLinkInput = ref('')
+const albumLinks = ref([])
 
 // Size input
 const newSize = ref('')
@@ -535,6 +540,20 @@ const handleAlbumFileSelect = (event) => {
     albumImages.value.push(file)
     albumPreviews.value.push({ url: URL.createObjectURL(file), name: file.name })
   })
+}
+
+// Add album link
+const addAlbumLink = () => {
+  const link = albumLinkInput.value.trim()
+  if (link) {
+    albumLinks.value.push(link)
+    albumLinkInput.value = ''
+  }
+}
+
+// Remove album link
+const removeAlbumLink = (index) => {
+  albumLinks.value.splice(index, 1)
 }
 
 // Remove album image
@@ -684,8 +703,13 @@ const resetForm = () => {
   editingProduct.value = null
   imageFile.value = null
   imagePreview.value = null
+  imageInputMode.value = 'upload'
+  imageLink.value = ''
   albumImages.value = []
   albumPreviews.value = []
+  albumInputMode.value = 'upload'
+  albumLinkInput.value = ''
+  albumLinks.value = []
   newSize.value = ''
   newColorName.value = ''
   newColorImageFile.value = null
@@ -755,8 +779,12 @@ const saveProduct = async () => {
 
     let imageUrl = form.value.image
 
+    // Use direct link if provided
+    if (imageInputMode.value === 'link' && imageLink.value) {
+      imageUrl = imageLink.value
+    }
     // Upload image if new file selected
-    if (imageFile.value) {
+    else if (imageFile.value) {
       const uploadResult = await uploadApi.uploadImage(imageFile.value)
       if (uploadResult.error) {
         throw new Error(uploadResult.error)
@@ -772,6 +800,10 @@ const saveProduct = async () => {
         throw new Error(uploadResult.error)
       }
       uploadedAlbumImages.push(uploadResult.url)
+    }
+    // Add album links directly
+    for (const link of albumLinks.value) {
+      uploadedAlbumImages.push(link)
     }
 
     const productData = {
@@ -1808,17 +1840,55 @@ const formTitle = computed(() =>
             <label class="block text-sm font-medium text-gray-700 mb-1">
               صورة/فيديو المنتج الرئيسي {{ editingProduct ? '' : '*' }}
             </label>
+            <!-- Toggle between upload and link -->
+            <div class="flex gap-2 mb-2">
+              <button
+                type="button"
+                @click="imageInputMode = 'upload'"
+                :class="[
+                  'px-3 py-1 rounded text-sm font-medium transition-all',
+                  imageInputMode === 'upload'
+                    ? 'bg-purple-600 text-white'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                ]"
+              >
+                رفع ملف
+              </button>
+              <button
+                type="button"
+                @click="imageInputMode = 'link'"
+                :class="[
+                  'px-3 py-1 rounded text-sm font-medium transition-all',
+                  imageInputMode === 'link'
+                    ? 'bg-purple-600 text-white'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                ]"
+              >
+                لينك مباشر
+              </button>
+            </div>
+            <!-- File upload input -->
             <input
+              v-if="imageInputMode === 'upload'"
               type="file"
               accept="image/*,video/mp4,video/webm,video/quicktime,video/avi,video/x-ms-wmv"
               @change="handleFileSelect"
               class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
             />
+            <!-- Direct link input -->
+            <input
+              v-else
+              type="url"
+              v-model="imageLink"
+              placeholder="الصق لينك الصورة أو الفيديو هنا"
+              dir="ltr"
+              class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            />
             <!-- Preview -->
-            <div v-if="imagePreview" class="mt-3">
+            <div v-if="imagePreview || imageLink" class="mt-3">
               <video
-                v-if="isVideo(imageFile?.name || imagePreview)"
-                :src="imagePreview"
+                v-if="isVideo(imageFile?.name || imagePreview || imageLink)"
+                :src="imageInputMode === 'link' ? imageLink : imagePreview"
                 class="h-32 w-32 object-cover rounded border"
                 muted
                 playsinline
@@ -1826,7 +1896,7 @@ const formTitle = computed(() =>
               />
               <img
                 v-else
-                :src="imagePreview"
+                :src="imageInputMode === 'link' ? imageLink : imagePreview"
                 alt="معاينة الصورة"
                 class="h-32 w-32 object-cover rounded border"
               />
@@ -1838,13 +1908,88 @@ const formTitle = computed(() =>
             <label class="block text-sm font-medium text-gray-700 mb-1">
               ألبوم صور وفيديوهات المنتج
             </label>
+            <!-- Toggle between upload and link -->
+            <div class="flex gap-2 mb-2">
+              <button
+                type="button"
+                @click="albumInputMode = 'upload'"
+                :class="[
+                  'px-3 py-1 rounded text-sm font-medium transition-all',
+                  albumInputMode === 'upload'
+                    ? 'bg-purple-600 text-white'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                ]"
+              >
+                رفع ملفات
+              </button>
+              <button
+                type="button"
+                @click="albumInputMode = 'link'"
+                :class="[
+                  'px-3 py-1 rounded text-sm font-medium transition-all',
+                  albumInputMode === 'link'
+                    ? 'bg-purple-600 text-white'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                ]"
+              >
+                لينكات مباشرة
+              </button>
+            </div>
+            <!-- File upload input -->
             <input
+              v-if="albumInputMode === 'upload'"
               type="file"
               accept="image/*,video/mp4,video/webm,video/quicktime,video/avi,video/x-ms-wmv"
               multiple
               @change="handleAlbumFileSelect"
               class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
             />
+            <!-- Direct link input -->
+            <div v-else class="flex gap-2">
+              <input
+                type="url"
+                v-model="albumLinkInput"
+                placeholder="الصق لينك الصورة أو الفيديو هنا"
+                dir="ltr"
+                class="flex-1 px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                @keyup.enter.prevent="addAlbumLink"
+              />
+              <button
+                type="button"
+                @click="addAlbumLink"
+                class="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 text-sm font-medium"
+              >
+                + إضافة
+              </button>
+            </div>
+            <!-- Album Links Preview -->
+            <div v-if="albumLinks.length > 0" class="mt-3">
+              <p class="text-sm text-gray-600 mb-2">لينكات مضافة:</p>
+              <div class="flex flex-wrap gap-2">
+                <div v-for="(link, index) in albumLinks" :key="'link-' + index" class="relative">
+                  <video
+                    v-if="isVideo(link)"
+                    :src="link"
+                    class="h-20 w-20 object-cover rounded border"
+                    muted
+                    playsinline
+                  />
+                  <img
+                    v-else
+                    :src="link"
+                    alt="لينك ألبوم"
+                    class="h-20 w-20 object-cover rounded border"
+                  />
+                  <button
+                    type="button"
+                    @click="removeAlbumLink(index)"
+                    class="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-red-600"
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+            </div>
             <!-- Existing Album Images -->
             <div v-if="form.images.length > 0" class="mt-3">
               <p class="text-sm text-gray-600 mb-2">الصور الحالية:</p>
