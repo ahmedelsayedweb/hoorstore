@@ -17,6 +17,9 @@ $router->get('/', function () use ($router) {
     return $router->app->version();
 });
 
+// Facebook Catalog Feed
+$router->get('feed/facebook', 'FacebookFeedController@feed');
+
 // Products API
 $router->group(['prefix' => 'api'], function () use ($router) {
     // Products
