@@ -60,7 +60,13 @@ const filteredProducts = computed(() => {
   if (selectedCategory.value === 'all') {
     return products.value
   }
-  return products.value.filter(p => p.category === selectedCategory.value)
+  const selected = selectedCategory.value.toLowerCase()
+  return products.value.filter(p => {
+    if (Array.isArray(p.category)) {
+      return p.category.some(c => c.toLowerCase() === selected)
+    }
+    return p.category?.toLowerCase() === selected
+  })
 })
 
 // Sort filtered products

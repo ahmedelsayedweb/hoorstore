@@ -25,6 +25,7 @@ class Product extends Model
     protected $casts = [
         'price' => 'float',
         'salePrice' => 'float',
+        'category' => 'array',
         'images' => 'array',
         'sizes' => 'array',
         'colors' => 'array',

@@ -23,7 +23,10 @@ const allMedia = ref([])
 
 const splitMedia = () => {
   const media = product.value?.images || []
-  allMedia.value = media.length ? media : (product.value?.image ? [product.value.image] : [])
+  const mainImage = product.value?.image
+  // Combine main image with gallery, removing duplicates
+  const combined = mainImage ? [mainImage, ...media] : [...media]
+  allMedia.value = [...new Set(combined)]
 }
 
 // Get current media URL
@@ -92,13 +95,7 @@ const selectedColorImage = ref(null)
 // Image modal
 const showImageModal = ref(false)
 
-const openImageModal = (index) => {
-  if (product.image) {
-
-  } else if (index !== undefined) {
-    selectedImage.value = index
-    selectedColorImage.value = null
-  }
+const openImageModal = () => {
   showImageModal.value = true
   document.body.style.overflow = 'hidden'
 }
@@ -280,30 +277,48 @@ const handleShare = async () => {
       <!-- Product Images -->
       <div class="space-y-4 lg:sticky lg:top-24 order-1 lg:order-2">
         <!-- Main Image Preview -->
-        <div class="aspect-[3/4] bg-gray-50 overflow-hidden rounded-lg cursor-pointer relative" @click="openImageModal(product)">
+        <div class="aspect-[3/4] bg-gray-50 overflow-hidden rounded-lg cursor-pointer relative" @click="openImageModal()">
+          <video
+            v-if="isVideo(getCurrentMedia())"
+            :src="getCurrentMedia()"
+            class="w-full h-full object-cover"
+            controls
+            playsinline
+          />
           <img
-            :src="product.image"
+            v-else
+            :src="getCurrentMedia()"
             :alt="product.name"
             class="w-full h-full object-cover hover:scale-105 transition-transform duration-500"
           />
         </div>
-        <!-- Thumbnail Gallery (images + videos) -->
-        <div v-if="allMedia.length > 0" class="grid grid-cols-4 gap-3">
+        <!-- Thumbnail Gallery (images + videos + color images) -->
+        <div v-if="allMedia.length > 0 || product.colors?.some(c => getColorImage(c))" class="grid grid-cols-4 gap-3">
+          <!-- Gallery thumbnails -->
           <button
             v-for="(media, index) in allMedia"
-            :key="index"
-            @click="isVideo(media) ? openImageModal(index) : (selectedImage = index, selectedColorImage = null)"
+            :key="'media-' + index"
+            @click="selectedImage = index; selectedColorImage = null"
             class="aspect-square bg-gray-50 overflow-hidden rounded-lg border-2 transition-all duration-300 hover:opacity-80 relative"
             :class="selectedImage === index && !selectedColorImage ? 'border-primary ring-2 ring-primary/20' : 'border-transparent'"
           >
             <video v-if="isVideo(media)" :src="media" class="w-full h-full object-cover" muted playsinline />
             <img v-else :src="media" :alt="`${product.name} ${index + 1}`" class="w-full h-full object-cover" />
-            <!-- Play icon overlay for videos -->
             <div v-if="isVideo(media)" class="absolute inset-0 flex items-center justify-center bg-black/20">
               <svg class="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M8 5v14l11-7z" />
               </svg>
             </div>
+          </button>
+          <!-- Color image thumbnails -->
+          <button
+            v-for="color in product.colors?.filter(c => getColorImage(c))"
+            :key="'color-' + getColorName(color)"
+            @click="selectColor(color)"
+            class="aspect-square bg-gray-50 overflow-hidden rounded-lg border-2 transition-all duration-300 hover:opacity-80 relative"
+            :class="selectedColorImage === getColorImage(color) ? 'border-primary ring-2 ring-primary/20' : 'border-transparent'"
+          >
+            <img :src="getColorImage(color)" :alt="getColorName(color)" class="w-full h-full object-cover" />
           </button>
         </div>
       </div>

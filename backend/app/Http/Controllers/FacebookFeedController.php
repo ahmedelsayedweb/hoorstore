@@ -72,7 +72,7 @@ class FacebookFeedController extends Controller
                 $imageLink,
                 $additionalImages,
                 $brand,
-                $product->category,
+                is_array($product->category) ? implode(', ', $product->category) : $product->category,
             ]);
         }
 

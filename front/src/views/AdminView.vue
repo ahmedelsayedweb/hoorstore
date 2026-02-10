@@ -478,7 +478,7 @@ const form = ref({
   name: '',
   price: '',
   salePrice: '',
-  category: '',
+  category: [],
   image: '',
   images: [],
   sizes: [],
@@ -499,6 +499,12 @@ const categories = [
 
 // Get category label
 const getCategoryLabel = (value) => {
+  if (Array.isArray(value)) {
+    return value.map(v => {
+      const cat = categories.find(c => c.value === v)
+      return cat ? cat.label : v
+    }).join(', ')
+  }
   const cat = categories.find(c => c.value === value)
   return cat ? cat.label : value
 }
@@ -690,7 +696,7 @@ const resetForm = () => {
     name: '',
     price: '',
     salePrice: '',
-    category: '',
+    category: [],
     image: '',
     images: [],
     sizes: [],
@@ -741,7 +747,7 @@ const openEditForm = (product) => {
     name: product.name || '',
     price: product.price || '',
     salePrice: product.salePrice || '',
-    category: product.category || '',
+    category: Array.isArray(product.category) ? [...product.category] : (product.category ? [product.category] : []),
     image: product.image || '',
     images: product.images ? [...product.images] : [],
     sizes: product.sizes ? [...product.sizes] : [],
@@ -772,6 +778,10 @@ const closeForm = () => {
 
 // Save product (create or update)
 const saveProduct = async () => {
+  if (form.value.category.length === 0) {
+    error.value = 'يرجى اختيار قسم واحد على الأقل'
+    return
+  }
   try {
     saving.value = true
     uploading.value = true
@@ -1818,21 +1828,28 @@ const formTitle = computed(() =>
             </div>
           </div>
 
-          <!-- Category -->
+          <!-- Category (Multi-select) -->
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">
-              القسم *
+              القسم * <span class="text-xs text-gray-400">(يمكن اختيار أكثر من قسم)</span>
             </label>
-            <select
-              v-model="form.category"
-              required
-              class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-            >
-              <option value="">اختر القسم</option>
-              <option v-for="cat in categories" :key="cat.value" :value="cat.value">
-                {{ cat.label }}
-              </option>
-            </select>
+            <div class="flex flex-wrap gap-3 p-3 border border-gray-300 rounded">
+              <label
+                v-for="cat in categories"
+                :key="cat.value"
+                class="flex items-center gap-2 cursor-pointer select-none px-3 py-1.5 rounded-full border transition-colors"
+                :class="form.category.includes(cat.value) ? 'bg-purple-100 border-purple-500 text-purple-700' : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'"
+              >
+                <input
+                  type="checkbox"
+                  :value="cat.value"
+                  v-model="form.category"
+                  class="hidden"
+                />
+                <span class="text-sm font-medium">{{ cat.label }}</span>
+              </label>
+            </div>
+            <p v-if="form.category.length === 0" class="text-xs text-red-500 mt-1">يرجى اختيار قسم واحد على الأقل</p>
           </div>
 
           <!-- Image Upload -->
