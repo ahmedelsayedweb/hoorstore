@@ -93,7 +93,9 @@ const selectedColorImage = ref(null)
 const showImageModal = ref(false)
 
 const openImageModal = (index) => {
-  if (index !== undefined) {
+  if (product.image) {
+
+  } else if (index !== undefined) {
     selectedImage.value = index
     selectedColorImage.value = null
   }
@@ -277,8 +279,8 @@ const handleShare = async () => {
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-16">
       <!-- Product Images -->
       <div class="space-y-4 lg:sticky lg:top-24 order-1 lg:order-2">
-        <!-- Main Image/Video Preview -->
-        <div class="aspect-[3/4] bg-gray-50 overflow-hidden rounded-lg cursor-pointer relative" @click="openImageModal()">
+        <!-- Main Image Preview -->
+        <div class="aspect-[3/4] bg-gray-50 overflow-hidden rounded-lg cursor-pointer relative" @click="openImageModal(product)">
           <img
             :src="product.image"
             :alt="product.name"
@@ -290,7 +292,7 @@ const handleShare = async () => {
           <button
             v-for="(media, index) in allMedia"
             :key="index"
-            @click="openImageModal(index)"
+            @click="isVideo(media) ? openImageModal(index) : (selectedImage = index, selectedColorImage = null)"
             class="aspect-square bg-gray-50 overflow-hidden rounded-lg border-2 transition-all duration-300 hover:opacity-80 relative"
             :class="selectedImage === index && !selectedColorImage ? 'border-primary ring-2 ring-primary/20' : 'border-transparent'"
           >
@@ -481,7 +483,7 @@ const handleShare = async () => {
           <p v-if="product.description.note" class="mt-4 text-green-600 font-medium text-sm">
             {{ product.description.note }}
           </p>
-          <p v-if="product.description.footer" class="mt-4 text-sm text-gray-600">{{ product.description.footer }}</p>
+          <p v-if="product.description.footer" class="mt-4 text-sm text-gray-600 whitespace-pre-wrap">{{ product.description.footer }}</p>
         </div>
 
         <!-- Share Button -->
