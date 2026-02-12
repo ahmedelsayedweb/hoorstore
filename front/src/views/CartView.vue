@@ -166,7 +166,7 @@ const saveEditedItem = async () => {
 
       <div class="flex gap-4 mb-4">
         <video v-if="isVideo(editForm.image || editingItem.image)" :src="editForm.image || editingItem.image" class="w-20 h-24 object-cover rounded" muted playsinline />
-        <img v-else :src="editForm.image || editingItem.image" :alt="editingItem.name" class="w-20 h-24 object-cover rounded" />
+        <img v-else :src="editForm.image || editingItem.image" :alt="editingItem.name" class="w-20 h-24 object-cover rounded" @error="(e) => { e.target.src = '/logo.png'; e.target.className = 'w-20 h-24 object-contain p-2 opacity-60 rounded' }" />
         <div>
           <h4 class="font-medium text-gray-900">{{ editingItem.name }}</h4>
           <p class="text-sm text-gray-500">{{ editForm.color }}</p>
@@ -342,7 +342,7 @@ const saveEditedItem = async () => {
             <!-- Image -->
             <div class="w-24 h-32 md:w-28 md:h-36 bg-gray-100 flex-shrink-0">
               <video v-if="isVideo(item.image)" :src="item.image" class="w-full h-full object-cover" muted playsinline />
-              <img v-else :src="item.image" :alt="item.name" class="w-full h-full object-cover" />
+              <img v-else :src="item.image" :alt="item.name" class="w-full h-full object-cover" @error="(e) => { e.target.src = '/logo.png'; e.target.className = 'w-full h-full object-contain p-3 opacity-60' }" />
             </div>
             <!-- Details -->
             <div class="flex flex-col justify-center">

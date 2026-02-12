@@ -20,7 +20,8 @@ const loading = ref(true)
 
 onMounted(async () => {
   try {
-    products.value = await productsApi.getAll()
+    const data = await productsApi.getAll()
+    products.value = data.sort(() => Math.random() - 0.5)
   } catch (error) {
     console.error('Failed to fetch featured products:', error)
   } finally {

@@ -66,7 +66,7 @@ const isVideo = (url) => {
             <!-- Product Image -->
             <div class="w-20 h-24 bg-gray-100 flex-shrink-0">
               <video v-if="isVideo(item.image)" :src="item.image" class="w-full h-full object-cover" muted playsinline />
-              <img v-else :src="item.image" :alt="item.name" class="w-full h-full object-cover" />
+              <img v-else :src="item.image" :alt="item.name" class="w-full h-full object-cover" @error="(e) => { e.target.src = '/logo.png'; e.target.className = 'w-full h-full object-contain p-2 opacity-60' }" />
             </div>
 
             <!-- Product Details -->

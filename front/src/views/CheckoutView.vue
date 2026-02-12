@@ -1287,7 +1287,7 @@ const continueShopping = () => {
 
         <div class="flex gap-4 mb-4">
           <video v-if="isVideo(editForm.image || editingItem.image)" :src="editForm.image || editingItem.image" class="w-20 h-24 object-cover rounded" muted playsinline />
-          <img v-else :src="editForm.image || editingItem.image" :alt="editingItem.name" class="w-20 h-24 object-cover rounded" />
+          <img v-else :src="editForm.image || editingItem.image" :alt="editingItem.name" class="w-20 h-24 object-cover rounded" @error="(e) => { e.target.src = '/logo.png'; e.target.className = 'w-20 h-24 object-contain p-2 opacity-60 rounded' }" />
           <div>
             <h4 class="font-medium text-gray-900">{{ editingItem.name }}</h4>
             <p class="text-sm text-gray-500">{{ editForm.color }}</p>
@@ -1763,7 +1763,7 @@ const continueShopping = () => {
                 <div class="relative">
                   <div class="w-16 h-20 bg-gray-100 rounded overflow-hidden">
                     <video v-if="isVideo(item.image)" :src="item.image" class="w-full h-full object-cover" muted playsinline />
-                    <img v-else :src="item.image" :alt="item.name" class="w-full h-full object-cover" />
+                    <img v-else :src="item.image" :alt="item.name" class="w-full h-full object-cover" @error="(e) => { e.target.src = '/logo.png'; e.target.className = 'w-full h-full object-contain p-2 opacity-60' }" />
                   </div>
                   <span class="absolute -top-2 -right-2 w-5 h-5 bg-primary text-white text-xs rounded-full flex items-center justify-center">
                     {{ item.quantity }}

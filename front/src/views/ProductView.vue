@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, reactive } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useCart } from '../composables/useCart'
 import { useLanguage } from '../composables/useLanguage'
@@ -26,12 +26,53 @@ const splitMedia = () => {
   const mainImage = product.value?.image
   // Combine main image with gallery, removing duplicates
   const combined = mainImage ? [mainImage, ...media] : [...media]
+  // Also include variant images
+  if (product.value?.variants?.length) {
+    for (const v of product.value.variants) {
+      if (v.image && !combined.includes(v.image)) {
+        combined.push(v.image)
+      }
+    }
+  }
   allMedia.value = [...new Set(combined)]
+}
+
+// Handle thumbnail click - also select variant color if applicable
+const handleThumbnailClick = (media, index) => {
+  selectedImage.value = index
+  selectedColorImage.value = null
+  resetMainImageState()
+  // If this media belongs to a variant, select that color
+  if (product.value?.variants?.length) {
+    const variant = product.value.variants.find(v => v.image === media)
+    if (variant && variant.color) {
+      selectColor({ name: variant.color, image: variant.image || '' })
+    }
+  }
 }
 
 // Get current media URL
 const getCurrentMedia = () => {
   return selectedColorImage.value || allMedia.value?.[selectedImage.value] || product.value?.image
+}
+
+// Image loading/error state
+const mainImageLoading = ref(true)
+const mainImageError = ref(false)
+const imageStates = reactive({}) // keyed by image URL
+
+const onMainImageLoad = () => {
+  mainImageLoading.value = false
+}
+const onMainImageError = () => {
+  mainImageLoading.value = false
+  mainImageError.value = true
+}
+const onThumbLoad = (url) => {
+  imageStates[url] = { loaded: true, error: false }
+}
+const onThumbError = (url) => {
+  imageStates[url] = { loaded: true, error: true }
 }
 
 // Share notification
@@ -111,16 +152,23 @@ const closeImageModal = () => {
   document.body.style.overflow = ''
 }
 
+const resetMainImageState = () => {
+  mainImageLoading.value = true
+  mainImageError.value = false
+}
+
 const prevImage = () => {
   if (!allMedia.value.length) return
   selectedColorImage.value = null
   selectedImage.value = (selectedImage.value - 1 + allMedia.value.length) % allMedia.value.length
+  resetMainImageState()
 }
 
 const nextImage = () => {
   if (!allMedia.value.length) return
   selectedColorImage.value = null
   selectedImage.value = (selectedImage.value + 1) % allMedia.value.length
+  resetMainImageState()
 }
 const selectedSizes = ref([])
 const selectedHeight = ref()
@@ -360,6 +408,14 @@ const handleShare = async () => {
       <div class="space-y-4 lg:sticky lg:top-24 order-1 lg:order-2">
         <!-- Main Image Preview -->
         <div class="aspect-[3/4] bg-gray-50 overflow-hidden rounded-lg cursor-pointer relative" @click="openImageModal()">
+          <!-- Loading Shimmer -->
+          <div
+            v-if="mainImageLoading && !isVideo(getCurrentMedia())"
+            class="absolute inset-0 bg-gray-200 animate-pulse flex items-center justify-center z-10"
+          >
+            <img src="/logo.png" alt="Loading" class="w-24 opacity-30" />
+          </div>
+
           <video
             v-if="isVideo(getCurrentMedia())"
             :src="getCurrentMedia()"
@@ -367,40 +423,42 @@ const handleShare = async () => {
             controls
             playsinline
           />
+          <!-- Error Fallback -->
+          <div
+            v-else-if="mainImageError"
+            class="w-full h-full flex items-center justify-center bg-gray-50"
+          >
+            <img src="/logo.png" alt="Hoor Store" class="w-32 opacity-60" />
+          </div>
           <img
             v-else
             :src="getCurrentMedia()"
             :alt="product.name"
             class="w-full h-full object-cover hover:scale-105 transition-transform duration-500"
+            :class="{ 'opacity-0': mainImageLoading }"
+            @load="onMainImageLoad"
+            @error="onMainImageError"
           />
         </div>
-        <!-- Thumbnail Gallery (images + videos + color images) -->
-        <div v-if="allMedia.length > 0 || product.colors?.some(c => getColorImage(c))" class="grid grid-cols-4 gap-3">
-          <!-- Gallery thumbnails -->
+        <!-- Thumbnail Gallery (images + videos + variant images) -->
+        <div v-if="allMedia.length > 1" class="grid grid-cols-4 gap-3">
           <button
             v-for="(media, index) in allMedia"
             :key="'media-' + index"
-            @click="selectedImage = index; selectedColorImage = null"
+            @click="handleThumbnailClick(media, index)"
             class="aspect-square bg-gray-50 overflow-hidden rounded-lg border-2 transition-all duration-300 hover:opacity-80 relative"
             :class="selectedImage === index && !selectedColorImage ? 'border-primary ring-2 ring-primary/20' : 'border-transparent'"
           >
             <video v-if="isVideo(media)" :src="media" class="w-full h-full object-cover" muted playsinline />
-            <img v-else :src="media" :alt="`${product.name} ${index + 1}`" class="w-full h-full object-cover" />
+            <div v-else-if="imageStates[media]?.error" class="w-full h-full flex items-center justify-center bg-gray-50">
+              <img src="/logo.png" alt="Hoor Store" class="w-8 opacity-60" />
+            </div>
+            <img v-else :src="media" :alt="`${product.name} ${index + 1}`" class="w-full h-full object-cover" @load="onThumbLoad(media)" @error="onThumbError(media)" />
             <div v-if="isVideo(media)" class="absolute inset-0 flex items-center justify-center bg-black/20">
               <svg class="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M8 5v14l11-7z" />
               </svg>
             </div>
-          </button>
-          <!-- Color image thumbnails -->
-          <button
-            v-for="color in product.colors?.filter(c => getColorImage(c))"
-            :key="'color-' + getColorName(color)"
-            @click="selectColor(color)"
-            class="aspect-square bg-gray-50 overflow-hidden rounded-lg border-2 transition-all duration-300 hover:opacity-80 relative"
-            :class="selectedColorImage === getColorImage(color) ? 'border-primary ring-2 ring-primary/20' : 'border-transparent'"
-          >
-            <img :src="getColorImage(color)" :alt="getColorName(color)" class="w-full h-full object-cover" />
           </button>
         </div>
       </div>
@@ -421,26 +479,6 @@ const handleShare = async () => {
           </span>
           <span v-if="product.isOnSale" class="bg-primary text-white text-xs px-3 py-1 rounded-full">{{ t('product.sale') }}</span>
         </div>
-
-        <!-- <p class="text-sm text-gray-500">Taxes included. <a href="#" class="underline">Shipping</a> calculated at checkout.</p> -->
-
-        <!-- Sale Countdown Banner -->
-        <!-- <div v-if="product.isOnSale" class="bg-amber-50 border border-amber-200 p-6 text-center">
-          <p class="text-pink-500 font-semibold text-lg mb-1">TIME IS TICKING</p>
-          <p class="text-pink-400 text-sm mb-4">White Friday sale ends in</p>
-          <div class="flex justify-center gap-2 text-pink-500 text-3xl font-bold mb-4">
-            <span>{{ formatNumber(countdown.days) }}</span>
-            <span class="text-pink-300">:</span>
-            <span>{{ formatNumber(countdown.hours) }}</span>
-            <span class="text-pink-300">:</span>
-            <span>{{ formatNumber(countdown.minutes) }}</span>
-            <span class="text-pink-300">:</span>
-            <span>{{ formatNumber(countdown.seconds) }}</span>
-          </div>
-          <button class="border border-pink-400 text-pink-500 px-4 py-2 text-sm rounded-full">
-            SAVE UP TO 50%
-          </button>
-        </div> -->
 
         <!-- Rating -->
         <div v-if="product.reviewCount" class="flex items-center gap-2">
@@ -718,6 +756,12 @@ const handleShare = async () => {
               autoplay
               playsinline
             />
+            <div
+              v-else-if="mainImageError"
+              class="flex items-center justify-center"
+            >
+              <img src="/logo.png" alt="Hoor Store" class="w-40 opacity-60" />
+            </div>
             <img
               v-else
               :src="getCurrentMedia()"

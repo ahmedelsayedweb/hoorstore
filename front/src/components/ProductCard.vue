@@ -1,8 +1,21 @@
 <script setup>
+import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
 const emit = defineEmits(['add-to-cart'])
+
+const imageLoading = ref(true)
+const imageError = ref(false)
+
+const onImageLoad = () => {
+  imageLoading.value = false
+}
+
+const onImageError = () => {
+  imageLoading.value = false
+  imageError.value = true
+}
 
 const videoExtensions = ['mp4', 'mov', 'avi', 'wmv', 'webm']
 const isVideo = (url) => {
@@ -57,6 +70,14 @@ const addToCart = (event) => {
   <a :href="`/collections/${id}`" class="group block no-underline ">
     <!-- Image Container -->
     <div class="relative aspect-[3/4] overflow-hidden bg-gray-100 mb-3 rounded-lg">
+      <!-- Loading Shimmer -->
+      <div
+        v-if="imageLoading && !isVideo(image)"
+        class="absolute inset-0 bg-gray-200 animate-pulse flex items-center justify-center"
+      >
+        <img src="/logo.png" alt="Loading" class="w-16 opacity-30" />
+      </div>
+
       <video
         v-if="isVideo(image)"
         :src="image"
@@ -66,11 +87,21 @@ const addToCart = (event) => {
         loop
         autoplay
       />
+      <!-- Error Fallback: Show Logo -->
+      <div
+        v-else-if="imageError"
+        class="w-full h-full flex items-center justify-center bg-gray-50"
+      >
+        <img src="/logo.png" alt="Hoor Store" class="w-24 opacity-60" />
+      </div>
       <img
         v-else
         :src="image"
         :alt="name"
         class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+        :class="{ 'opacity-0': imageLoading }"
+        @load="onImageLoad"
+        @error="onImageError"
       />
       <!-- Sale Badge -->
       <span
