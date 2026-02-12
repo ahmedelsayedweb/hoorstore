@@ -36,6 +36,11 @@ const toggleEditSize = (size) => {
 const loadingProduct = ref(false)
 const currentProduct = ref(null)
 
+// Variant support
+const productHasVariants = ref(false)
+const currentVariants = ref([])
+const variantSizesForColor = ref([])
+
 // Available options from product
 const availableSizes = ref([])
 const availableHeights = ref([])
@@ -62,6 +67,12 @@ const onColorChange = (colorName) => {
       editForm.value.image = colorImage
     }
   }
+  // Update available sizes for variant products
+  if (productHasVariants.value) {
+    const variant = currentVariants.value.find(v => v.color === colorName)
+    variantSizesForColor.value = variant?.sizes || []
+    editForm.value.sizes = []
+  }
 }
 
 // Open edit modal and fetch product details
@@ -81,12 +92,36 @@ const openEditModal = async (item) => {
     try {
       const product = await productsApi.getById(item.productId)
       currentProduct.value = product
-      availableSizes.value = product.sizes || []
       availableHeights.value = product.heights || []
-      availableColors.value = product.colors || []
+
+      if (product.variants && Array.isArray(product.variants) && product.variants.length > 0) {
+        productHasVariants.value = true
+        currentVariants.value = product.variants
+        const hasColors = product.variants.some(v => v.color && v.color.trim() !== '')
+        if (hasColors) {
+          availableColors.value = product.variants.map(v => ({ name: v.color, image: v.image || '' }))
+          availableSizes.value = []
+          const variant = product.variants.find(v => v.color === editForm.value.color)
+          variantSizesForColor.value = variant?.sizes || []
+        } else {
+          // Sizes-only: no colors, load sizes directly
+          availableColors.value = []
+          availableSizes.value = []
+          variantSizesForColor.value = product.variants[0]?.sizes || []
+        }
+      } else {
+        productHasVariants.value = false
+        currentVariants.value = []
+        variantSizesForColor.value = []
+        availableSizes.value = product.sizes || []
+        availableColors.value = product.colors || []
+      }
     } catch (error) {
       console.error('Failed to load product:', error)
       currentProduct.value = null
+      productHasVariants.value = false
+      currentVariants.value = []
+      variantSizesForColor.value = []
       availableSizes.value = []
       availableHeights.value = []
       availableColors.value = []
@@ -160,8 +195,8 @@ const saveEditedItem = async () => {
           </select>
         </div>
 
-        <!-- Size (Multiple Selection) -->
-        <div v-if="availableSizes.length > 0">
+        <!-- Size: LEGACY (Multiple Selection) -->
+        <div v-if="!productHasVariants && availableSizes.length > 0">
           <label class="block text-sm font-medium text-gray-700 mb-2">{{ t('product.size') }}</label>
           <div class="flex flex-wrap gap-2">
             <button
@@ -175,6 +210,32 @@ const saveEditedItem = async () => {
                 : 'bg-white text-gray-700 border-gray-200 hover:border-gray-400'"
             >
               {{ size }}
+            </button>
+          </div>
+        </div>
+
+        <!-- Size: VARIANT (Single Selection with Stock) -->
+        <div v-if="productHasVariants && variantSizesForColor.length > 0">
+          <label class="block text-sm font-medium text-gray-700 mb-2">{{ t('product.size') }}</label>
+          <div class="flex flex-wrap gap-2">
+            <button
+              v-for="sizeObj in variantSizesForColor"
+              :key="sizeObj.size"
+              type="button"
+              @click="sizeObj.quantity > 0 ? (editForm.sizes = [sizeObj.size]) : null"
+              :disabled="sizeObj.quantity === 0"
+              class="min-w-[40px] px-3 py-2 text-sm font-medium border-2 rounded-lg transition-all duration-200 text-center"
+              :class="[
+                sizeObj.quantity === 0
+                  ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed line-through'
+                  : editForm.sizes.includes(sizeObj.size)
+                    ? 'bg-primary text-white border-primary'
+                    : 'bg-white text-gray-700 border-gray-200 hover:border-gray-400'
+              ]"
+            >
+              <span>{{ sizeObj.size }}</span>
+              <span v-if="sizeObj.quantity === 0" class="block text-[10px] text-red-500" style="text-decoration: none;">نفذ</span>
+              <span v-else class="block text-[10px]" :class="editForm.sizes.includes(sizeObj.size) ? 'text-white/70' : 'text-gray-400'">{{ sizeObj.quantity }}</span>
             </button>
           </div>
         </div>

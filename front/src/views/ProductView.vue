@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useCart } from '../composables/useCart'
 import { useLanguage } from '../composables/useLanguage'
@@ -73,10 +73,16 @@ const fetchProduct = async () => {
     splitMedia()
 
     // Set default selected values to first option
-    if (product.value.colors?.length) {
+    if (product.value.variants?.length) {
+      // Variant mode: select first variant color (only if colors exist)
+      const firstVariant = product.value.variants[0]
+      if (firstVariant.color) {
+        selectColor({ name: firstVariant.color, image: firstVariant.image || '' })
+      }
+    } else if (product.value.colors?.length) {
       selectColor(product.value.colors[0])
     }
-    if (product.value.sizes?.length) selectedSizes.value = [product.value.sizes[0]]
+    if (!product.value.variants?.length && product.value.sizes?.length) selectedSizes.value = [product.value.sizes[0]]
     if (product.value.heights?.length) selectedHeight.value = product.value.heights[0]
     if (product.value.weights?.length) selectedWeight.value = product.value.weights[0]
   } catch (err) {
@@ -121,6 +127,38 @@ const selectedHeight = ref()
 const selectedWeight = ref()
 const quantity = ref(1)
 
+// Variant support
+const selectedVariantSize = ref(null)
+
+const hasVariants = computed(() => {
+  return product.value?.variants && Array.isArray(product.value.variants) && product.value.variants.length > 0
+})
+
+// Detect if variants have colors or are sizes-only
+const variantHasColors = computed(() => {
+  if (!hasVariants.value) return false
+  return product.value.variants.some(v => v.color && v.color.trim() !== '')
+})
+
+const variantSizesForColor = computed(() => {
+  if (!hasVariants.value) return []
+  // Sizes-only mode: single variant with empty color
+  if (!variantHasColors.value) {
+    return product.value.variants[0]?.sizes || []
+  }
+  // Colors mode: filter by selected color
+  if (!selectedColor.value) return []
+  const colorName = getColorName(selectedColor.value)
+  const variant = product.value.variants.find(v => v.color === colorName)
+  return variant?.sizes || []
+})
+
+const maxQuantity = computed(() => {
+  if (!hasVariants.value || !selectedVariantSize.value) return Infinity
+  const sizeObj = variantSizesForColor.value.find(s => s.size === selectedVariantSize.value)
+  return sizeObj?.quantity || 0
+})
+
 // Toggle size selection (allow multiple)
 const toggleSize = (size) => {
   const index = selectedSizes.value.indexOf(size)
@@ -149,6 +187,11 @@ const selectColor = (color) => {
     selectedColorImage.value = colorImage
   } else {
     selectedColorImage.value = null
+  }
+  // Reset variant size when color changes
+  if (hasVariants.value) {
+    selectedVariantSize.value = null
+    quantity.value = 1
   }
 }
 
@@ -195,45 +238,84 @@ const decreaseQuantity = () => {
 }
 
 const increaseQuantity = () => {
+  if (hasVariants.value && quantity.value >= maxQuantity.value) return
   quantity.value++
 }
 
 const handleAddToCart = () => {
-  // Get the correct image - color image if available, otherwise default
   const cartImage = selectedColorImage.value || product.value.images?.[0] || product.value.image
 
-  addToCart({
-    id: product.value.id,
-    name: product.value.name,
-    price: product.value.salePrice,
-    image: cartImage,
-    color: getColorName(selectedColor.value),
-    sizes: selectedSizes.value,
-    height: selectedHeight.value,
-    weight: selectedWeight.value,
-    quantity: quantity.value,
-    hasSizesAvailable: product.value.sizes?.length > 0,
-    hasColorsAvailable: product.value.colors?.length > 0
-  })
+  if (hasVariants.value) {
+    if (!selectedVariantSize.value) {
+      alert('يرجى اختيار المقاس')
+      return
+    }
+    addToCart({
+      id: product.value.id,
+      name: product.value.name,
+      price: product.value.salePrice,
+      image: cartImage,
+      color: variantHasColors.value ? getColorName(selectedColor.value) : '',
+      sizes: [selectedVariantSize.value],
+      height: selectedHeight.value,
+      weight: selectedWeight.value,
+      quantity: quantity.value,
+      hasSizesAvailable: true,
+      hasColorsAvailable: variantHasColors.value
+    })
+  } else {
+    addToCart({
+      id: product.value.id,
+      name: product.value.name,
+      price: product.value.salePrice,
+      image: cartImage,
+      color: getColorName(selectedColor.value),
+      sizes: selectedSizes.value,
+      height: selectedHeight.value,
+      weight: selectedWeight.value,
+      quantity: quantity.value,
+      hasSizesAvailable: product.value.sizes?.length > 0,
+      hasColorsAvailable: product.value.colors?.length > 0
+    })
+  }
 }
 
 const handleBuyNow = async () => {
-  // Get the correct image - color image if available, otherwise default
   const cartImage = selectedColorImage.value || product.value.images?.[0] || product.value.image
 
-  await addToCart({
-    id: product.value.id,
-    name: product.value.name,
-    price: product.value.salePrice,
-    image: cartImage,
-    color: getColorName(selectedColor.value),
-    sizes: selectedSizes.value,
-    height: selectedHeight.value,
-    weight: selectedWeight.value,
-    quantity: quantity.value,
-    hasSizesAvailable: product.value.sizes?.length > 0,
-    hasColorsAvailable: product.value.colors?.length > 0
-  }, { openDrawer: false })
+  if (hasVariants.value) {
+    if (!selectedVariantSize.value) {
+      alert('يرجى اختيار المقاس')
+      return
+    }
+    await addToCart({
+      id: product.value.id,
+      name: product.value.name,
+      price: product.value.salePrice,
+      image: cartImage,
+      color: variantHasColors.value ? getColorName(selectedColor.value) : '',
+      sizes: [selectedVariantSize.value],
+      height: selectedHeight.value,
+      weight: selectedWeight.value,
+      quantity: quantity.value,
+      hasSizesAvailable: true,
+      hasColorsAvailable: variantHasColors.value
+    }, { openDrawer: false })
+  } else {
+    await addToCart({
+      id: product.value.id,
+      name: product.value.name,
+      price: product.value.salePrice,
+      image: cartImage,
+      color: getColorName(selectedColor.value),
+      sizes: selectedSizes.value,
+      height: selectedHeight.value,
+      weight: selectedWeight.value,
+      quantity: quantity.value,
+      hasSizesAvailable: product.value.sizes?.length > 0,
+      hasColorsAvailable: product.value.colors?.length > 0
+    }, { openDrawer: false })
+  }
   router.push('/checkout')
 }
 
@@ -377,24 +459,28 @@ const handleShare = async () => {
           <span class="text-sm text-gray-600">{{ product.reviewCount }} {{ t('product.reviews') }}</span>
         </div>
 
-        <!-- Color Options -->
-        <div v-if="product.colors?.length">
+        <!-- Color Options (variant-aware) -->
+        <div v-if="hasVariants ? (variantHasColors && product.variants?.length) : product.colors?.length">
           <p class="text-sm font-medium text-gray-900 mb-3">{{ t('product.color') }}</p>
           <div class="flex flex-wrap gap-2">
             <button
-              v-for="color in product.colors"
+              v-for="color in hasVariants
+                ? product.variants.map(v => ({ name: v.color, image: v.image || '' }))
+                : product.colors"
               :key="getColorName(color)"
               @click="selectColor(color)"
               class="px-4 py-2.5 text-sm font-medium border-2 rounded-lg transition-all duration-200"
               :class="getColorName(selectedColor) === getColorName(color)
                 ? 'bg-primary text-white border-gray-900'
-                : 'bg-white text-gray-700 border-gray-200 hover:border-gray-900'" >
+                : 'bg-white text-gray-700 border-gray-200 hover:border-gray-900'"
+            >
               {{ getColorName(color) }}
             </button>
           </div>
         </div>
-        <!-- Size Options (Multiple Selection) -->
-        <div v-if="product.sizes?.length">
+
+        <!-- Size Options: LEGACY mode (multiple selection) -->
+        <div v-if="!hasVariants && product.sizes?.length">
           <p class="text-sm font-medium text-gray-900 mb-3">{{ t('product.size') }}</p>
           <div class="flex flex-wrap gap-2">
             <button
@@ -409,6 +495,53 @@ const handleShare = async () => {
               {{ size }}
             </button>
           </div>
+          <!-- WhatsApp Size Help Alert -->
+          <a
+            href="https://wa.me/201224982557"
+            target="_blank"
+            class="mt-3 flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-800 hover:bg-green-100 transition-colors duration-200"
+          >
+            <svg class="w-5 h-5 text-green-600 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+            </svg>
+            <span>لو عندك أي استفسار عن المقاسات أو محتاج مساعدة، ابعتلنا على الواتساب</span>
+          </a>
+        </div>
+
+        <!-- Size Options: VARIANT mode (single selection with stock) -->
+        <div v-if="hasVariants && variantSizesForColor.length > 0">
+          <p class="text-sm font-medium text-gray-900 mb-3">{{ t('product.size') }}</p>
+          <div class="flex flex-wrap gap-2">
+            <button
+              v-for="sizeObj in variantSizesForColor"
+              :key="sizeObj.size"
+              @click="sizeObj.quantity > 0 ? (selectedVariantSize = sizeObj.size, quantity = 1) : null"
+              :disabled="sizeObj.quantity === 0"
+              class="min-w-[50px] px-4 py-2 text-sm font-medium border-2 rounded-lg transition-all duration-200 text-center"
+              :class="[
+                sizeObj.quantity === 0
+                  ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed line-through'
+                  : selectedVariantSize === sizeObj.size
+                    ? 'bg-primary text-white border-gray-900'
+                    : 'bg-white text-gray-700 border-gray-200 hover:border-gray-900'
+              ]"
+            >
+              <span>{{ sizeObj.size }}</span>
+              <span v-if="sizeObj.quantity === 0" class="block text-[10px] text-red-500 mt-0.5 no-underline" style="text-decoration: none;">نفذ</span>
+              <span v-else class="block text-[10px] mt-0.5" :class="selectedVariantSize === sizeObj.size ? 'text-white/70' : 'text-gray-400'">{{ sizeObj.quantity }} متاح</span>
+            </button>
+          </div>
+          <!-- WhatsApp Size Help Alert -->
+          <a
+            href="https://wa.me/201224982557"
+            target="_blank"
+            class="mt-3 flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-800 hover:bg-green-100 transition-colors duration-200"
+          >
+            <svg class="w-5 h-5 text-green-600 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+            </svg>
+            <span>لو عندك أي استفسار عن المقاسات أو محتاج مساعدة، ابعتلنا على الواتساب</span>
+          </a>
         </div>
 
         <!-- Height Options -->

@@ -51,6 +51,7 @@ class ProductController extends Controller
             'colors' => 'nullable|array',
             'heights' => 'nullable|array',
             'weights' => 'nullable|array',
+            'variants' => 'nullable|array',
             'description' => 'nullable|string',
             'inStock' => 'nullable|boolean',
         ]);
@@ -67,6 +68,7 @@ class ProductController extends Controller
             'colors' => $request->input('colors', []),
             'heights' => $request->input('heights', []),
             'weights' => $request->input('weights', []),
+            'variants' => $request->input('variants'),
             'description' => $request->input('description', ''),
             'inStock' => $request->input('inStock', true),
         ]);
@@ -98,6 +100,7 @@ class ProductController extends Controller
             'colors' => 'nullable|array',
             'heights' => 'nullable|array',
             'weights' => 'nullable|array',
+            'variants' => 'nullable|array',
             'description' => 'nullable|string',
             'inStock' => 'nullable|boolean',
         ]);
@@ -114,6 +117,7 @@ class ProductController extends Controller
             'colors',
             'heights',
             'weights',
+            'variants',
             'description',
             'inStock',
         ]));
@@ -242,6 +246,15 @@ class ProductController extends Controller
                 foreach ($product->colors as $color) {
                     if (is_array($color) && !empty($color['image'])) {
                         $usedUrls[] = $color['image'];
+                    }
+                }
+            }
+
+            // Variant color images
+            if ($product->variants && is_array($product->variants)) {
+                foreach ($product->variants as $variant) {
+                    if (is_array($variant) && !empty($variant['image'])) {
+                        $usedUrls[] = $variant['image'];
                     }
                 }
             }

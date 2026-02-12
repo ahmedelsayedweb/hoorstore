@@ -18,6 +18,7 @@ class Product extends Model
         'colors',
         'heights',
         'weights',
+        'variants',
         'description',
         'inStock',
     ];
@@ -31,6 +32,7 @@ class Product extends Model
         'colors' => 'array',
         'heights' => 'array',
         'weights' => 'array',
+        'variants' => 'array',
         'inStock' => 'boolean',
     ];
 }

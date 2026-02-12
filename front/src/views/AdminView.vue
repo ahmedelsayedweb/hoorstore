@@ -472,6 +472,17 @@ const newColorName = ref('')
 const newColorImageFile = ref(null)
 const newColorImagePreview = ref(null)
 
+// Variant mode (always enabled - controls sizes+quantities)
+const useVariants = ref(true)
+const variantWithColors = ref(true) // true = colors+sizes, false = sizes only
+const variantColors = ref([])
+const variantSizesOnly = ref([]) // for no-colors mode: [{ size, quantity }]
+const newVariantColorName = ref('')
+const newVariantColorImageFile = ref(null)
+const newVariantColorImagePreview = ref(null)
+const newVariantSizeInputs = ref({})
+const newVariantSizeOnlyInput = ref({ size: '', quantity: '' })
+
 // Form data
 const form = ref({
   code: '',
@@ -689,6 +700,99 @@ const removeWeight = (index) => {
   form.value.weights.splice(index, 1)
 }
 
+// Handle variant color image file selection
+const handleVariantColorImageSelect = (event) => {
+  const file = event.target.files[0]
+  if (file) {
+    newVariantColorImageFile.value = file
+    newVariantColorImagePreview.value = URL.createObjectURL(file)
+  }
+}
+
+// Add variant color
+const addVariantColor = async () => {
+  if (!newVariantColorName.value.trim()) return
+  const colorName = newVariantColorName.value.trim()
+
+  if (variantColors.value.some(v => v.color === colorName)) {
+    alert('هذا اللون موجود بالفعل')
+    return
+  }
+
+  let colorImage = ''
+  if (newVariantColorImageFile.value) {
+    try {
+      const uploadResult = await uploadApi.uploadImage(newVariantColorImageFile.value)
+      if (uploadResult.error) throw new Error(uploadResult.error)
+      colorImage = uploadResult.url
+    } catch (err) {
+      console.error('Failed to upload variant color image:', err)
+      alert('فشل في رفع صورة اللون')
+      return
+    }
+  }
+
+  variantColors.value.push({
+    color: colorName,
+    image: colorImage,
+    sizes: []
+  })
+
+  newVariantColorName.value = ''
+  newVariantColorImageFile.value = null
+  newVariantColorImagePreview.value = null
+}
+
+// Remove variant color
+const removeVariantColor = (index) => {
+  variantColors.value.splice(index, 1)
+  delete newVariantSizeInputs.value[index]
+}
+
+// Add size to a variant color
+const addVariantSize = (colorIndex) => {
+  const input = newVariantSizeInputs.value[colorIndex]
+  if (!input?.size?.trim()) return
+
+  const variant = variantColors.value[colorIndex]
+  if (variant.sizes.some(s => s.size === input.size.trim())) {
+    alert('هذا المقاس موجود بالفعل لهذا اللون')
+    return
+  }
+
+  variant.sizes.push({
+    size: input.size.trim(),
+    quantity: parseInt(input.quantity) || 0
+  })
+
+  newVariantSizeInputs.value[colorIndex] = { size: '', quantity: '' }
+}
+
+// Remove size from a variant color
+const removeVariantSize = (colorIndex, sizeIndex) => {
+  variantColors.value[colorIndex].sizes.splice(sizeIndex, 1)
+}
+
+// Add size in sizes-only mode
+const addVariantSizeOnly = () => {
+  const input = newVariantSizeOnlyInput.value
+  if (!input.size?.trim()) return
+  if (variantSizesOnly.value.some(s => s.size === input.size.trim())) {
+    alert('هذا المقاس موجود بالفعل')
+    return
+  }
+  variantSizesOnly.value.push({
+    size: input.size.trim(),
+    quantity: parseInt(input.quantity) || 0
+  })
+  newVariantSizeOnlyInput.value = { size: '', quantity: '' }
+}
+
+// Remove size in sizes-only mode
+const removeVariantSizeOnly = (index) => {
+  variantSizesOnly.value.splice(index, 1)
+}
+
 // Reset form
 const resetForm = () => {
   form.value = {
@@ -722,6 +826,15 @@ const resetForm = () => {
   newColorImagePreview.value = null
   newHeight.value = ''
   newWeight.value = ''
+  useVariants.value = true
+  variantWithColors.value = true
+  variantColors.value = []
+  variantSizesOnly.value = []
+  newVariantColorName.value = ''
+  newVariantColorImageFile.value = null
+  newVariantColorImagePreview.value = null
+  newVariantSizeInputs.value = {}
+  newVariantSizeOnlyInput.value = { size: '', quantity: '' }
 }
 
 // Open form for new product
@@ -767,6 +880,37 @@ const openEditForm = (product) => {
   newColorImagePreview.value = null
   newHeight.value = ''
   newWeight.value = ''
+
+  // Initialize variant state
+  if (product.variants && Array.isArray(product.variants) && product.variants.length > 0) {
+    useVariants.value = true
+    // Detect sizes-only mode: single variant with empty color
+    const isSizesOnly = product.variants.length === 1 && !product.variants[0].color
+    if (isSizesOnly) {
+      variantWithColors.value = false
+      variantSizesOnly.value = (product.variants[0].sizes || []).map(s => ({ size: s.size, quantity: s.quantity || 0 }))
+      variantColors.value = []
+    } else {
+      variantWithColors.value = true
+      variantColors.value = product.variants.map(v => ({
+        color: v.color || '',
+        image: v.image || '',
+        sizes: (v.sizes || []).map(s => ({ size: s.size, quantity: s.quantity || 0 }))
+      }))
+      variantSizesOnly.value = []
+    }
+  } else {
+    useVariants.value = true
+    variantWithColors.value = true
+    variantColors.value = []
+    variantSizesOnly.value = []
+  }
+  newVariantColorName.value = ''
+  newVariantColorImageFile.value = null
+  newVariantColorImagePreview.value = null
+  newVariantSizeInputs.value = {}
+  newVariantSizeOnlyInput.value = { size: '', quantity: '' }
+
   showForm.value = true
 }
 
@@ -824,10 +968,20 @@ const saveProduct = async () => {
       category: form.value.category,
       image: imageUrl,
       images: uploadedAlbumImages,
-      sizes: form.value.sizes,
-      colors: form.value.colors,
+      sizes: useVariants.value ? [] : form.value.sizes,
+      colors: useVariants.value ? [] : form.value.colors,
       heights: form.value.heights,
       weights: form.value.weights,
+      variants: useVariants.value
+        ? (variantWithColors.value
+          ? variantColors.value.map(v => ({
+              color: v.color,
+              image: v.image,
+              sizes: v.sizes.map(s => ({ size: s.size, quantity: s.quantity }))
+            }))
+          : [{ color: '', image: '', sizes: variantSizesOnly.value.map(s => ({ size: s.size, quantity: s.quantity })) }]
+        )
+        : null,
       description: form.value.description,
       inStock: form.value.inStock
     }
@@ -2066,107 +2220,180 @@ const formTitle = computed(() =>
             <p v-if="uploading" class="mt-2 text-sm text-purple-600">جاري رفع الملفات...</p>
           </div>
 
-          <!-- Sizes -->
+          <!-- Sizes & Colors Mode Selection -->
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">
-              المقاسات المتاحة
-            </label>
-            <input
-              v-model="newSize"
-              type="text"
-              class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-              placeholder="أدخل المقاسات مفصولة بفاصلة (مثال: 30,32,34)"
-              @keyup.enter.prevent="addSizes"
-              @blur="addSizes"
-            />
-            <div v-if="form.sizes.length > 0" class="mt-3 flex flex-wrap gap-2">
-              <span
-                v-for="(size, index) in form.sizes"
-                :key="index"
-                class="inline-flex items-center px-3 py-1 bg-gray-900 text-white rounded-full text-sm"
-              >
-                {{ size }}
-                <button
-                  type="button"
-                  @click="removeSize(index)"
-                  class="mr-2 hover:text-red-300"
-                >
-                  ×
-                </button>
-              </span>
-            </div>
-          </div>
-
-          <!-- Colors with Images -->
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">
-              الألوان المتاحة (مع الصور)
-            </label>
-            <div class="border border-gray-300 rounded p-4 bg-gray-50">
-              <!-- Add new color -->
-              <div class="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
-                <div>
-                  <label class="block text-xs text-gray-500 mb-1">اسم اللون</label>
-                  <input
-                    v-model="newColorName"
-                    type="text"
-                    class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                    placeholder="مثال: أسود"
-                  />
-                </div>
-                <div>
-                  <label class="block text-xs text-gray-500 mb-1">صورة اللون (اختياري)</label>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    @change="handleColorImageSelect"
-                    class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  />
-                </div>
-                <button
-                  type="button"
-                  @click="addColor"
-                  class="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors"
-                >
-                  + إضافة لون
-                </button>
-              </div>
-              <!-- Preview new color image -->
-              <div v-if="newColorImagePreview" class="mt-2">
-                <img :src="newColorImagePreview" alt="معاينة" class="h-16 w-16 object-cover rounded border" />
-              </div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">المقاسات والكميات</label>
+            <div class="flex gap-4">
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="radio" :value="true" v-model="variantWithColors" class="text-purple-600 focus:ring-purple-500" />
+                <span class="text-sm text-gray-700">ألوان + مقاسات + كميات</span>
+              </label>
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="radio" :value="false" v-model="variantWithColors" class="text-purple-600 focus:ring-purple-500" />
+                <span class="text-sm text-gray-700">مقاسات + كميات فقط (بدون ألوان)</span>
+              </label>
             </div>
 
-            <!-- Colors List -->
-            <div v-if="form.colors.length > 0" class="mt-4 space-y-2">
-              <div
-                v-for="(color, index) in form.colors"
-                :key="index"
-                class="flex items-center gap-3 p-3 bg-white border border-gray-200 rounded-lg"
-              >
-                <!-- Color Image -->
-                <div v-if="getColorImage(color)" class="w-12 h-12 flex-shrink-0">
-                  <img
-                    :src="getColorImage(color)"
-                    :alt="getColorName(color)"
-                    class="w-full h-full object-cover rounded border"
-                  />
+            <!-- WITH COLORS MODE -->
+            <div v-if="variantWithColors">
+              <label class="block text-sm font-medium text-gray-700 mb-2">
+                إدارة المتغيرات (لون + مقاسات + كميات)
+              </label>
+
+              <!-- Add Variant Color -->
+              <div class="border border-gray-300 rounded p-4 bg-gray-50">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+                  <div>
+                    <label class="block text-xs text-gray-500 mb-1">اسم اللون</label>
+                    <input
+                      v-model="newVariantColorName"
+                      type="text"
+                      class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      placeholder="مثال: أسود"
+                      @keyup.enter.prevent="addVariantColor"
+                    />
+                  </div>
+                  <div>
+                    <label class="block text-xs text-gray-500 mb-1">صورة اللون (اختياري)</label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      @change="handleVariantColorImageSelect"
+                      class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    @click="addVariantColor"
+                    class="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors"
+                  >
+                    + إضافة لون
+                  </button>
                 </div>
-                <div v-else class="w-12 h-12 flex-shrink-0 bg-gray-200 rounded border flex items-center justify-center text-gray-400 text-xs">
-                  بدون صورة
+                <div v-if="newVariantColorImagePreview" class="mt-2">
+                  <img :src="newVariantColorImagePreview" alt="معاينة" class="h-16 w-16 object-cover rounded border" />
                 </div>
-                <!-- Color Name -->
-                <span class="flex-1 font-medium text-gray-900">{{ getColorName(color) }}</span>
-                <!-- Remove Button -->
-                <button
-                  type="button"
-                  @click="removeColor(index)"
-                  class="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
+              </div>
+
+              <!-- Variant Colors List -->
+              <div v-if="variantColors.length > 0" class="mt-4 space-y-4">
+                <div
+                  v-for="(variant, cIdx) in variantColors"
+                  :key="cIdx"
+                  class="border border-gray-200 rounded-lg overflow-hidden"
                 >
-                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
-                </button>
+                  <div class="flex items-center gap-3 p-4 bg-gray-50 border-b">
+                    <img v-if="variant.image" :src="variant.image" class="w-10 h-10 object-cover rounded border" />
+                    <div v-else class="w-10 h-10 bg-gray-200 rounded border flex items-center justify-center text-xs text-gray-400">بدون</div>
+                    <span class="font-bold text-gray-900 flex-1">{{ variant.color }}</span>
+                    <span class="text-xs text-gray-500 bg-gray-200 px-2 py-1 rounded-full">{{ variant.sizes.length }} مقاس</span>
+                    <button type="button" @click="removeVariantColor(cIdx)" class="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded">
+                      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  </div>
+                  <div class="p-4">
+                    <table v-if="variant.sizes.length > 0" class="w-full text-sm mb-3">
+                      <thead>
+                        <tr class="text-gray-500 text-xs">
+                          <th class="text-right pb-2">المقاس</th>
+                          <th class="text-right pb-2">الكمية</th>
+                          <th class="pb-2 w-10"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr v-for="(s, sIdx) in variant.sizes" :key="sIdx" class="border-t border-gray-100">
+                          <td class="py-2 font-medium">{{ s.size }}</td>
+                          <td class="py-2">
+                            <input type="number" v-model.number="s.quantity" min="0" class="w-24 px-2 py-1 border border-gray-300 rounded text-center focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent" />
+                          </td>
+                          <td class="py-2 text-center">
+                            <button type="button" @click="removeVariantSize(cIdx, sIdx)" class="text-red-400 hover:text-red-600 text-lg">×</button>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                    <div class="flex gap-2 items-end">
+                      <div class="flex-1">
+                        <label class="block text-xs text-gray-500 mb-1">المقاس</label>
+                        <input
+                          :value="newVariantSizeInputs[cIdx]?.size || ''"
+                          @input="if (!newVariantSizeInputs[cIdx]) newVariantSizeInputs[cIdx] = { size: '', quantity: '' }; newVariantSizeInputs[cIdx].size = $event.target.value"
+                          type="text" placeholder="مثال: M"
+                          class="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                          @keyup.enter.prevent="addVariantSize(cIdx)"
+                        />
+                      </div>
+                      <div class="w-24">
+                        <label class="block text-xs text-gray-500 mb-1">الكمية</label>
+                        <input
+                          :value="newVariantSizeInputs[cIdx]?.quantity || ''"
+                          @input="if (!newVariantSizeInputs[cIdx]) newVariantSizeInputs[cIdx] = { size: '', quantity: '' }; newVariantSizeInputs[cIdx].quantity = $event.target.value"
+                          type="number" placeholder="0" min="0"
+                          class="w-full px-2 py-1.5 border border-gray-300 rounded text-sm text-center focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                          @keyup.enter.prevent="addVariantSize(cIdx)"
+                        />
+                      </div>
+                      <button type="button" @click="addVariantSize(cIdx)" class="px-3 py-1.5 bg-green-600 text-white rounded text-sm hover:bg-green-700 transition-colors">+ مقاس</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <p v-else class="mt-3 text-sm text-gray-500 text-center py-4 border border-dashed border-gray-300 rounded-lg">
+                أضف ألوان لبدء إدارة المتغيرات
+              </p>
+            </div>
+
+            <!-- SIZES ONLY MODE (no colors) -->
+            <div v-else>
+              <label class="block text-sm font-medium text-gray-700 mb-2">
+                المقاسات والكميات
+              </label>
+              <div class="border border-gray-200 rounded-lg overflow-hidden">
+                <div class="p-4">
+                  <table v-if="variantSizesOnly.length > 0" class="w-full text-sm mb-3">
+                    <thead>
+                      <tr class="text-gray-500 text-xs">
+                        <th class="text-right pb-2">المقاس</th>
+                        <th class="text-right pb-2">الكمية</th>
+                        <th class="pb-2 w-10"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="(s, sIdx) in variantSizesOnly" :key="sIdx" class="border-t border-gray-100">
+                        <td class="py-2 font-medium">{{ s.size }}</td>
+                        <td class="py-2">
+                          <input type="number" v-model.number="s.quantity" min="0" class="w-24 px-2 py-1 border border-gray-300 rounded text-center focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent" />
+                        </td>
+                        <td class="py-2 text-center">
+                          <button type="button" @click="removeVariantSizeOnly(sIdx)" class="text-red-400 hover:text-red-600 text-lg">×</button>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                  <div class="flex gap-2 items-end">
+                    <div class="flex-1">
+                      <label class="block text-xs text-gray-500 mb-1">المقاس</label>
+                      <input
+                        v-model="newVariantSizeOnlyInput.size"
+                        type="text" placeholder="مثال: M"
+                        class="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        @keyup.enter.prevent="addVariantSizeOnly"
+                      />
+                    </div>
+                    <div class="w-24">
+                      <label class="block text-xs text-gray-500 mb-1">الكمية</label>
+                      <input
+                        v-model="newVariantSizeOnlyInput.quantity"
+                        type="number" placeholder="0" min="0"
+                        class="w-full px-2 py-1.5 border border-gray-300 rounded text-sm text-center focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        @keyup.enter.prevent="addVariantSizeOnly"
+                      />
+                    </div>
+                    <button type="button" @click="addVariantSizeOnly" class="px-3 py-1.5 bg-green-600 text-white rounded text-sm hover:bg-green-700 transition-colors">+ مقاس</button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
