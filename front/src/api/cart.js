@@ -80,6 +80,12 @@ export const ordersApi = {
     return res.json()
   },
 
+  // Get orders by phone number
+  async getByPhone(phone) {
+    const res = await fetch(`${API_URL}/orders/phone/${encodeURIComponent(phone)}`)
+    return res.json()
+  },
+
   // Create new order
   async create(orderData) {
     const res = await fetch(`${API_URL}/orders`, {

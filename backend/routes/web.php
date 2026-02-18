@@ -43,6 +43,7 @@ $router->group(['prefix' => 'api'], function () use ($router) {
     $router->get('orders', 'OrderController@index');
     $router->get('orders/{id}', 'OrderController@show');
     $router->get('orders/number/{orderNumber}', 'OrderController@showByNumber');
+    $router->get('orders/phone/{phone}', 'OrderController@getByPhone');
     $router->post('orders', 'OrderController@store');
     $router->put('orders/{id}', 'OrderController@update');
     $router->delete('orders/{id}', 'OrderController@destroy');

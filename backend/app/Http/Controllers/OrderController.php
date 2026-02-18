@@ -61,6 +61,23 @@ class OrderController extends Controller
     }
 
     /**
+     * Get orders by phone number
+     */
+    public function getByPhone($phone): JsonResponse
+    {
+        $phone = preg_replace('/[\s\-]/', '', $phone);
+
+        $orders = Order::with('items')
+            ->where('phone', 'LIKE', '%' . $phone)
+            ->orWhere('phone2', 'LIKE', '%' . $phone)
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->map(fn($order) => $this->formatOrder($order));
+
+        return response()->json($orders);
+    }
+
+    /**
      * Create new order
      */
     public function store(Request $request): JsonResponse

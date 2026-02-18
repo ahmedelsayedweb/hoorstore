@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import ProductCard from '../components/ProductCard.vue'
@@ -15,6 +15,9 @@ const route = useRoute()
 // Products data
 const products = ref([])
 const loading = ref(true)
+const currentPage = ref(1)
+const lastPage = ref(1)
+const perPage = 8
 
 // Category tabs
 const categories = computed(() => [
@@ -55,23 +58,9 @@ const sortOptions = computed(() => [
   { value: 'newest', label: t('collection.newest') }
 ])
 
-// Filter products by category
-const filteredProducts = computed(() => {
-  if (selectedCategory.value === 'all') {
-    return products.value
-  }
-  const selected = selectedCategory.value.toLowerCase()
-  return products.value.filter(p => {
-    if (Array.isArray(p.category)) {
-      return p.category.some(c => c.toLowerCase() === selected)
-    }
-    return p.category?.toLowerCase() === selected
-  })
-})
-
-// Sort filtered products
+// Sort products (client-side on accumulated data)
 const sortedProducts = computed(() => {
-  const sorted = [...filteredProducts.value]
+  const sorted = [...products.value]
   switch (selectedSort.value) {
     case 'price-asc':
       return sorted.sort((a, b) => (a.salePrice || a.price) - (b.salePrice || b.price))
@@ -91,12 +80,10 @@ const closeAllDropdowns = () => {
 const handleAddToCart = (productId) => {
   const product = products.value.find(p => p.id === productId)
   if (product) {
-    // Check if product has sizes or colors - redirect to product page if so
     const hasSizes = product.sizes && product.sizes.length > 0
     const hasColors = product.colors && product.colors.length > 0
 
     if (hasSizes || hasColors) {
-      // Redirect to product page for size/color selection
       window.location.href = `/collections/${productId}`
       return
     }
@@ -113,16 +100,85 @@ const handleAddToCart = (productId) => {
   }
 }
 
-// Fetch products on mount
-onMounted(async () => {
+// Fetch a page from backend
+const fetchPage = async (page, category) => {
+  const res = await productsApi.getPage(page, perPage, category)
+  return res
+}
+
+// Infinite scroll
+const loadingMore = ref(false)
+const sentinel = ref(null)
+let observer = null
+
+const hasMore = computed(() => currentPage.value < lastPage.value)
+
+const loadMore = async () => {
+  if (loadingMore.value || !hasMore.value) return
+  loadingMore.value = true
   try {
-    const data = await productsApi.getAll()
-    products.value = data.sort(() => Math.random() - 0.5)
+    const res = await fetchPage(currentPage.value + 1, selectedCategory.value)
+    products.value.push(...res.data)
+    currentPage.value = res.current_page
+    lastPage.value = res.last_page
+  } catch (e) {
+    console.error('Failed to load more products:', e)
+  } finally {
+    loadingMore.value = false
+  }
+}
+
+const initObserver = () => {
+  if (!observer) {
+    observer = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting) {
+        loadMore()
+      }
+    }, { rootMargin: '200px' })
+  }
+}
+
+watch(sentinel, (el, oldEl) => {
+  if (oldEl) observer?.unobserve(oldEl)
+  if (el) {
+    initObserver()
+    observer.observe(el)
+  }
+})
+
+// Reset and refetch when category changes
+const loadInitialProducts = async () => {
+  loading.value = true
+  products.value = []
+  currentPage.value = 1
+  lastPage.value = 1
+  try {
+    const res = await fetchPage(1, selectedCategory.value)
+    products.value = res.data
+    currentPage.value = res.current_page
+    lastPage.value = res.last_page
   } catch (error) {
     console.error('Failed to fetch products:', error)
   } finally {
     loading.value = false
+    await nextTick()
+    if (sentinel.value) {
+      initObserver()
+      observer.observe(sentinel.value)
+    }
   }
+}
+
+watch(selectedCategory, () => {
+  loadInitialProducts()
+})
+
+onMounted(() => {
+  loadInitialProducts()
+})
+
+onUnmounted(() => {
+  observer?.disconnect()
 })
 </script>
 
@@ -248,7 +304,7 @@ onMounted(async () => {
               </button>
             </div>
           </div>
-          <span class="text-sm text-gray-500">{{ filteredProducts.length }} {{ t('collection.products') }}</span>
+          <span class="text-sm text-gray-500">{{ products.length }} {{ t('collection.products') }}</span>
         </div>
       </div>
     </div>
@@ -270,18 +326,28 @@ onMounted(async () => {
       </div>
 
       <!-- Products -->
-      <div v-else class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5 lg:gap-8">
-        <ProductCard
-          v-for="product in sortedProducts"
-          :key="product.id"
-          :id="product.id"
-          :image="product.image"
-          :name="product.name"
-          :original-price="product.price"
-          :sale-price="product.salePrice"
-          :is-on-sale="!!product.salePrice"
-          @add-to-cart="handleAddToCart"
-        />
+      <div v-else>
+        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5 lg:gap-8">
+          <ProductCard
+            v-for="product in sortedProducts"
+            :key="product.id"
+            :id="product.id"
+            :image="product.image"
+            :name="product.name"
+            :original-price="product.price"
+            :sale-price="product.salePrice"
+            :is-on-sale="!!product.salePrice"
+            @add-to-cart="handleAddToCart"
+          />
+        </div>
+
+        <!-- Loading more spinner -->
+        <div v-if="loadingMore" class="flex justify-center py-8">
+          <div class="w-8 h-8 border-4 border-[#5B3A8C] border-t-transparent rounded-full animate-spin"></div>
+        </div>
+
+        <!-- Scroll sentinel -->
+        <div ref="sentinel" v-if="hasMore" class="h-1"></div>
       </div>
     </div>
   </div>

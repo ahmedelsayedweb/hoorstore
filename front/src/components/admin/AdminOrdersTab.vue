@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { ordersApi } from '../../api/cart'
 
 // Orders list
@@ -46,6 +46,26 @@ const filteredOrders = computed(() => {
 
   return result
 })
+
+// Pagination
+const ordersCurrentPage = ref(1)
+const ordersPerPage = ref(10)
+
+const ordersTotalPages = computed(() => Math.ceil(filteredOrders.value.length / ordersPerPage.value))
+
+const paginatedOrders = computed(() => {
+  const start = (ordersCurrentPage.value - 1) * ordersPerPage.value
+  return filteredOrders.value.slice(start, start + ordersPerPage.value)
+})
+
+const goToOrderPage = (page) => {
+  if (page >= 1 && page <= ordersTotalPages.value) {
+    ordersCurrentPage.value = page
+  }
+}
+
+// Reset page when filters change
+watch(orderFilters, () => { ordersCurrentPage.value = 1 }, { deep: true })
 
 // Reset filters
 const resetOrderFilters = () => {
@@ -318,7 +338,7 @@ defineExpose({ orders })
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-100">
-          <tr v-for="order in filteredOrders" :key="order.id" class="hover:bg-gray-50 transition-colors" :class="{ 'bg-purple-50': selectedOrders.includes(order.id) }">
+          <tr v-for="order in paginatedOrders" :key="order.id" class="hover:bg-gray-50 transition-colors" :class="{ 'bg-purple-50': selectedOrders.includes(order.id) }">
             <td class="px-4 py-4 text-center">
               <input type="checkbox" :checked="selectedOrders.includes(order.id)" @change="toggleOrderSelection(order.id)" class="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded cursor-pointer" />
             </td>
@@ -351,7 +371,7 @@ defineExpose({ orders })
               </div>
             </td>
           </tr>
-          <tr v-if="filteredOrders.length === 0">
+          <tr v-if="paginatedOrders.length === 0">
             <td colspan="8" class="px-6 py-16 text-center text-gray-400">
               {{ orders.length === 0 ? 'لا توجد طلبات حتى الآن.' : 'لا توجد نتائج مطابقة للفلتر.' }}
             </td>
@@ -363,7 +383,7 @@ defineExpose({ orders })
     <!-- Orders: Mobile Cards -->
     <div v-if="!ordersLoading" class="md:hidden space-y-3">
       <div
-        v-for="order in filteredOrders"
+        v-for="order in paginatedOrders"
         :key="'m-' + order.id"
         class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden"
         :class="{ 'ring-2 ring-purple-300': selectedOrders.includes(order.id) }"
@@ -398,8 +418,49 @@ defineExpose({ orders })
           <button @click="deleteOrder(order)" class="flex-1 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors text-center">حذف</button>
         </div>
       </div>
-      <div v-if="filteredOrders.length === 0" class="text-center py-16 text-gray-400 text-sm">
+      <div v-if="paginatedOrders.length === 0" class="text-center py-16 text-gray-400 text-sm">
         {{ orders.length === 0 ? 'لا توجد طلبات حتى الآن.' : 'لا توجد نتائج مطابقة للفلتر.' }}
+      </div>
+    </div>
+
+    <!-- Pagination -->
+    <div v-if="ordersTotalPages > 1" class="flex flex-wrap items-center justify-between gap-3 mt-4 px-2">
+      <span class="text-sm text-gray-500">
+        عرض {{ (ordersCurrentPage - 1) * ordersPerPage + 1 }}-{{ Math.min(ordersCurrentPage * ordersPerPage, filteredOrders.length) }} من {{ filteredOrders.length }} طلب
+      </span>
+      <div class="flex items-center gap-1">
+        <button
+          @click="goToOrderPage(ordersCurrentPage - 1)"
+          :disabled="ordersCurrentPage === 1"
+          class="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          السابق
+        </button>
+        <template v-for="page in ordersTotalPages" :key="page">
+          <button
+            v-if="page === 1 || page === ordersTotalPages || (page >= ordersCurrentPage - 1 && page <= ordersCurrentPage + 1)"
+            @click="goToOrderPage(page)"
+            :class="[
+              'px-3 py-1.5 text-sm rounded-lg border',
+              page === ordersCurrentPage
+                ? 'bg-[#5B3A8C] text-white border-[#5B3A8C]'
+                : 'border-gray-300 hover:bg-gray-50'
+            ]"
+          >
+            {{ page }}
+          </button>
+          <span
+            v-else-if="page === ordersCurrentPage - 2 || page === ordersCurrentPage + 2"
+            class="px-1 text-gray-400"
+          >...</span>
+        </template>
+        <button
+          @click="goToOrderPage(ordersCurrentPage + 1)"
+          :disabled="ordersCurrentPage === ordersTotalPages"
+          class="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          التالي
+        </button>
       </div>
     </div>
 

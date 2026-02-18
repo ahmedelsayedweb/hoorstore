@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { productsApi, uploadApi } from '../../api/products'
 
 // Helper to check if a URL is a video
@@ -24,6 +24,33 @@ const imagePreview = ref(null)
 const imageFile = ref(null)
 const imageInputMode = ref('upload')
 const imageLink = ref('')
+
+// Description editor
+const descriptionEditor = ref(null)
+
+const execCmd = (command) => {
+  document.execCommand(command, false, null)
+  descriptionEditor.value?.focus()
+}
+
+const execCreateLink = () => {
+  const url = prompt('أدخل الرابط:')
+  if (url) {
+    document.execCommand('createLink', false, url)
+    descriptionEditor.value?.focus()
+  }
+}
+
+const onDescriptionInput = () => {
+  console.log(form.value);  
+  form.value.description = descriptionEditor.value?.innerHTML || ''
+}
+
+const syncDescriptionEditor = () => {
+  if (descriptionEditor.value) {
+    descriptionEditor.value.innerHTML = form.value.description || ''
+  }
+}
 
 // Album images state
 const albumImages = ref([])
@@ -89,12 +116,33 @@ const getCategoryLabel = (value) => {
   return cat ? cat.label : value
 }
 
-// Fetch all products
+// Pagination
+const currentPage = ref(1)
+const perPage = ref(10)
+const totalPages = ref(1)
+const totalProducts = ref(0)
+
+const goToPage = async (page) => {
+  if (page >= 1 && page <= totalPages.value) {
+    currentPage.value = page
+    await fetchProducts()
+  }
+}
+
+// Fetch products with backend pagination
 const fetchProducts = async () => {
   try {
     loading.value = true
     error.value = null
-    products.value = await productsApi.getAll()
+    const res = await productsApi.getPage(currentPage.value, perPage.value)
+    products.value = res.data
+    totalPages.value = res.last_page
+    totalProducts.value = res.total
+    // If current page exceeds last page (e.g. after delete), go to last page
+    if (currentPage.value > res.last_page && res.last_page > 0) {
+      currentPage.value = res.last_page
+      await fetchProducts()
+    }
   } catch (err) {
     error.value = 'فشل في تحميل المنتجات'
     console.error(err)
@@ -441,6 +489,7 @@ const resetForm = () => {
 const openNewForm = () => {
   resetForm()
   showForm.value = true
+  nextTick(syncDescriptionEditor)
 }
 
 // Open form for editing
@@ -509,6 +558,7 @@ const openEditForm = (product) => {
   newVariantSizeOnlyInput.value = { size: '', quantity: '' }
 
   showForm.value = true
+  nextTick(syncDescriptionEditor)
 }
 
 // Close form
@@ -629,7 +679,7 @@ defineExpose({ products })
     <!-- Actions Bar -->
     <div class="mb-5 flex justify-between items-center">
       <h2 class="text-lg sm:text-xl font-bold text-gray-800">
-        المنتجات <span class="text-gray-400 font-normal">({{ products.length }})</span>
+        المنتجات <span class="text-gray-400 font-normal">({{ totalProducts }})</span>
       </h2>
       <button
         @click="openNewForm"
@@ -782,6 +832,47 @@ defineExpose({ products })
       </div>
       <div v-if="products.length === 0" class="text-center py-16 text-gray-400 text-sm">
         لا توجد منتجات. اضغط "إضافة منتج" لإنشاء منتج جديد.
+      </div>
+    </div>
+
+    <!-- Pagination -->
+    <div v-if="totalPages > 1" class="flex flex-wrap items-center justify-between gap-3 mt-4 px-2">
+      <span class="text-sm text-gray-500">
+        عرض {{ (currentPage - 1) * perPage + 1 }}-{{ Math.min(currentPage * perPage, totalProducts) }} من {{ totalProducts }} منتج
+      </span>
+      <div class="flex items-center gap-1">
+        <button
+          @click="goToPage(currentPage - 1)"
+          :disabled="currentPage === 1"
+          class="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          السابق
+        </button>
+        <template v-for="page in totalPages" :key="page">
+          <button
+            v-if="page === 1 || page === totalPages || (page >= currentPage - 1 && page <= currentPage + 1)"
+            @click="goToPage(page)"
+            :class="[
+              'px-3 py-1.5 text-sm rounded-lg border',
+              page === currentPage
+                ? 'bg-[#5B3A8C] text-white border-[#5B3A8C]'
+                : 'border-gray-300 hover:bg-gray-50'
+            ]"
+          >
+            {{ page }}
+          </button>
+          <span
+            v-else-if="page === currentPage - 2 || page === currentPage + 2"
+            class="px-1 text-gray-400"
+          >...</span>
+        </template>
+        <button
+          @click="goToPage(currentPage + 1)"
+          :disabled="currentPage === totalPages"
+          class="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          التالي
+        </button>
       </div>
     </div>
 
@@ -1361,12 +1452,27 @@ defineExpose({ products })
             <label class="block text-sm font-medium text-gray-700 mb-1">
               الوصف
             </label>
-            <textarea
-              v-model="form.description"
-              rows="3"
-              class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-              placeholder="أدخل وصف المنتج"
-            ></textarea>
+            <!-- Toolbar -->
+            <div class="flex flex-wrap gap-1 p-2 border border-gray-300 rounded-t bg-gray-50">
+              <button type="button" @click="execCmd('bold')" class="px-2 py-1 text-sm font-bold border border-gray-300 rounded hover:bg-gray-200" title="Bold">B</button>
+              <button type="button" @click="execCmd('italic')" class="px-2 py-1 text-sm italic border border-gray-300 rounded hover:bg-gray-200" title="Italic">I</button>
+              <button type="button" @click="execCmd('underline')" class="px-2 py-1 text-sm underline border border-gray-300 rounded hover:bg-gray-200" title="Underline">U</button>
+              <span class="w-px bg-gray-300 mx-1"></span>
+              <button type="button" @click="execCmd('insertUnorderedList')" class="px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-200" title="Bullet List">&#8226; List</button>
+              <button type="button" @click="execCmd('insertOrderedList')" class="px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-200" title="Numbered List">1. List</button>
+              <span class="w-px bg-gray-300 mx-1"></span>
+              <button type="button" @click="execCreateLink" class="px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-200" title="Link">&#128279;</button>
+              <button type="button" @click="execCmd('removeFormat')" class="px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-200" title="Clear Formatting">&#10005;</button>
+            </div>
+            <!-- Editable Area -->
+            <div
+              ref="descriptionEditor"
+              contenteditable="true"
+              @input="onDescriptionInput"
+              class="w-full min-h-[100px] px-3 py-2 border border-t-0 border-gray-300 rounded-b focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent prose prose-sm max-w-none"
+              dir="rtl"
+              :data-placeholder="'أدخل وصف المنتج'"
+            ></div>
           </div>
 
           <!-- In Stock -->

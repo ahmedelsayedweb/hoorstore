@@ -32,7 +32,8 @@ const navItems = computed(() => [
   { name: t('nav.home'), link: '/' },
   { name: t('nav.children'), link: '/collection?category=children' },
   { name: t('nav.men'), link: '/collection?category=men' },
-  { name: t('nav.woman'), link: '/collection?category=woman' }
+  { name: t('nav.woman'), link: '/collection?category=woman' },
+  { name: t('nav.myOrders'), link: '/my-orders' }
 ])
 
 const isCountryDropdownOpen = ref(false)

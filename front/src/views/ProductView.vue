@@ -669,7 +669,7 @@ const handleShare = async () => {
           <p v-if="product.description.note" class="mt-4 text-green-600 font-medium text-sm">
             {{ product.description.note }}
           </p>
-          <p v-if="product.description.footer" class="mt-4 text-sm text-gray-600 whitespace-pre-wrap">{{ product.description.footer }}</p>
+          <div v-if="product.description.footer" class="mt-4 text-sm text-gray-600 prose prose-sm max-w-none" v-html="product.description.footer"></div>
         </div>
 
         <!-- Share Button -->

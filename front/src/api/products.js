@@ -1,9 +1,17 @@
 const API_URL = import.meta.env.VITE_API_URL
 
 export const productsApi = {
-  // Get all products
+  // Get all products (no pagination - for admin)
   async getAll() {
     const res = await fetch(`${API_URL}/products`)
+    return res.json()
+  },
+
+  // Get products with pagination
+  async getPage(page = 1, perPage = 8, category = '') {
+    const params = new URLSearchParams({ page, per_page: perPage })
+    if (category && category !== 'all') params.append('category', category)
+    const res = await fetch(`${API_URL}/products?${params}`)
     return res.json()
   },
 

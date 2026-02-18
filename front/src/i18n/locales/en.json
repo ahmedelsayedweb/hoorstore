@@ -9,7 +9,8 @@
     "pants": "Pants",
     "skirts": "Skirts",
     "isdal": "Isdal",
-    "cardigans": "Cardigans"
+    "cardigans": "Cardigans",
+    "myOrders": "My Orders"
   },
   "header": {
     "search": "Search",
@@ -212,6 +213,37 @@
   "about": {
     "title": "About Hoor Store",
     "description": "At Hoor Store, fashion meets fun for the whole family! Discover trendy outfits for kids, men, and woman, crafted for comfort, style, and everyday confidence. Shop your favorites and enjoy a shopping experience made just for you!"
+  },
+  "myOrders": {
+    "title": "My Orders",
+    "enterPhone": "Enter your phone number to view your orders",
+    "phonePlaceholder": "Phone number",
+    "search": "Search",
+    "searching": "Searching...",
+    "noOrders": "No orders found for this number",
+    "tryAgain": "Check the number and try again",
+    "orderNumber": "Order Number",
+    "date": "Date",
+    "status": "Status",
+    "total": "Total",
+    "items": "Items",
+    "itemCount": "{count} item(s)",
+    "viewDetails": "View Details",
+    "hideDetails": "Hide Details",
+    "subtotal": "Subtotal",
+    "shipping": "Shipping",
+    "discount": "Discount",
+    "quantity": "Quantity",
+    "color": "Color",
+    "size": "Size",
+    "statuses": {
+      "pending": "Pending",
+      "confirmed": "Confirmed",
+      "processing": "Processing",
+      "shipped": "Shipped",
+      "delivered": "Delivered",
+      "cancelled": "Cancelled"
+    }
   },
   "notFound": {
     "title": "Page Not Found",

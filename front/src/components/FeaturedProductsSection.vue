@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ProductCard from './ProductCard.vue'
 import { productsApi } from '@/api/products'
@@ -17,16 +17,69 @@ defineProps({
 
 const products = ref([])
 const loading = ref(true)
+const currentPage = ref(1)
+const lastPage = ref(1)
+const perPage = 8
+const loadingMore = ref(false)
+const sentinel = ref(null)
+let observer = null
+
+const hasMore = computed(() => currentPage.value < lastPage.value)
+
+const loadMore = async () => {
+  if (loadingMore.value || !hasMore.value) return
+  loadingMore.value = true
+  try {
+    const res = await productsApi.getPage(currentPage.value + 1, perPage)
+    products.value.push(...res.data)
+    currentPage.value = res.current_page
+    lastPage.value = res.last_page
+  } catch (e) {
+    console.error('Failed to load more products:', e)
+  } finally {
+    loadingMore.value = false
+  }
+}
+
+const initObserver = () => {
+  if (!observer) {
+    observer = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting) {
+        loadMore()
+      }
+    }, { rootMargin: '200px' })
+  }
+}
+
+// Watch sentinel ref - observe when it appears, disconnect when it disappears
+watch(sentinel, (el, oldEl) => {
+  if (oldEl) observer?.unobserve(oldEl)
+  if (el) {
+    initObserver()
+    observer.observe(el)
+  }
+})
 
 onMounted(async () => {
   try {
-    const data = await productsApi.getAll()
-    products.value = data.sort(() => Math.random() - 0.5)
+    const res = await productsApi.getPage(1, perPage)
+    products.value = res.data
+    currentPage.value = res.current_page
+    lastPage.value = res.last_page
   } catch (error) {
     console.error('Failed to fetch featured products:', error)
   } finally {
     loading.value = false
+    await nextTick()
+    if (sentinel.value) {
+      initObserver()
+      observer.observe(sentinel.value)
+    }
   }
+})
+
+onUnmounted(() => {
+  observer?.disconnect()
 })
 
 const handleAddToCart = (productId) => {
@@ -63,19 +116,28 @@ const handleAddToCart = (productId) => {
     </div>
 
     <!-- Products Grid -->
-    
-    <div v-else class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
-      <ProductCard
-        v-for="product in products"
-        :key="product.id"
-        :id="product.id"
-        :image="product.image"
-        :name="product.name"
-        :original-price="product.price"
-        :sale-price="product.salePrice"
-        :is-on-sale="product.isOnSale"
-        @add-to-cart="handleAddToCart"
-      />
+    <div v-else>
+      <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
+        <ProductCard
+          v-for="product in products"
+          :key="product.id"
+          :id="product.id"
+          :image="product.image"
+          :name="product.name"
+          :original-price="product.price"
+          :sale-price="product.salePrice"
+          :is-on-sale="product.isOnSale"
+          @add-to-cart="handleAddToCart"
+        />
+      </div>
+
+      <!-- Loading more spinner -->
+      <div v-if="loadingMore" class="flex justify-center py-8">
+        <div class="w-8 h-8 border-4 border-[#5B3A8C] border-t-transparent rounded-full animate-spin"></div>
+      </div>
+
+      <!-- Scroll sentinel -->
+      <div ref="sentinel" v-if="hasMore" class="h-1"></div>
     </div>
   </section>
 </template>

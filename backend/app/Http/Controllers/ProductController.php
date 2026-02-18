@@ -11,12 +11,39 @@ use Illuminate\Support\Facades\File;
 class ProductController extends Controller
 {
     /**
-     * Get all products
+     * Get all products (with optional pagination and category filter)
+     * Query params: page, per_page, category
+     * Without page param: returns all products (backward compatible)
      */
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        $products = Product::all();
-        return response()->json($products);
+        $query = Product::orderBy('created_at', 'desc');
+
+        // Category filter
+        if ($request->has('category') && $request->input('category') !== 'all') {
+            $category = $request->input('category');
+            $query->where(function ($q) use ($category) {
+                $q->whereJsonContains('category', $category)
+                  ->orWhere('category', 'LIKE', '%"' . $category . '"%');
+            });
+        }
+
+        // If no page param, return all (for admin)
+        if (!$request->has('page')) {
+            return response()->json($query->get());
+        }
+
+        // Paginated response
+        $perPage = (int) $request->input('per_page', 8);
+        $paginated = $query->paginate($perPage);
+
+        return response()->json([
+            'data' => $paginated->items(),
+            'current_page' => $paginated->currentPage(),
+            'last_page' => $paginated->lastPage(),
+            'per_page' => $paginated->perPage(),
+            'total' => $paginated->total(),
+        ]);
     }
 
     /**
