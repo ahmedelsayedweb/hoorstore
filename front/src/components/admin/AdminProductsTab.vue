@@ -101,7 +101,7 @@ const form = ref({
 const categories = [
   { value: 'children', label: 'الاطفال' },
   { value: 'men', label: 'رجالي' },
-  { value: 'Woman', label: 'حريمي' },
+  { value: 'woman', label: 'حريمي' },
 ]
 
 // Get category label

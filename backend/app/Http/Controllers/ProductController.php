@@ -20,8 +20,8 @@ class ProductController extends Controller
         $query = Product::orderBy('created_at', 'desc');
 
         // Category filter
-        if ($request->has('category') && $request->input('category') !== 'all') {
-            $category = $request->input('category');
+        if ($request->has('category') && strtolower($request->input('category')) !== 'all') {
+            $category = ucfirst(strtolower($request->input('category')));
             $query->where(function ($q) use ($category) {
                 $q->whereJsonContains('category', $category)
                   ->orWhere('category', 'LIKE', '%"' . $category . '"%');
@@ -32,6 +32,9 @@ class ProductController extends Controller
         if (!$request->has('page')) {
             return response()->json($query->get());
         }
+
+        // Public: only in-stock products
+        $query->where('inStock', true);
 
         // Paginated response
         $perPage = (int) $request->input('per_page', 8);
