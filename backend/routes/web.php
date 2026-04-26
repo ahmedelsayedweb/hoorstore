@@ -60,6 +60,18 @@ $router->group(['prefix' => 'api'], function () use ($router) {
     $router->put('coupons/{id}', 'CouponController@update');
     $router->delete('coupons/{id}', 'CouponController@destroy');
 
+    // Purchases
+    $router->get('purchases', 'PurchaseController@index');
+    $router->post('purchases', 'PurchaseController@store');
+    $router->put('purchases/{id}', 'PurchaseController@update');
+    $router->delete('purchases/{id}', 'PurchaseController@destroy');
+
+    // Sales
+    $router->get('sales', 'SaleController@index');
+    $router->post('sales', 'SaleController@store');
+    $router->put('sales/{id}', 'SaleController@update');
+    $router->delete('sales/{id}', 'SaleController@destroy');
+
     // Migrations (Admin)
     $router->post('migrate/run', 'MigrationController@run');
     $router->get('migrate/status', 'MigrationController@status');

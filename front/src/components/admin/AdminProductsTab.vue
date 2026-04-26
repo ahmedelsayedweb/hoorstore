@@ -134,7 +134,7 @@ const fetchProducts = async () => {
   try {
     loading.value = true
     error.value = null
-    const res = await productsApi.getPage(currentPage.value, perPage.value)
+    const res = await productsApi.getPage(currentPage.value, perPage.value,'','admin')
     products.value = res.data
     totalPages.value = res.last_page
     totalProducts.value = res.total

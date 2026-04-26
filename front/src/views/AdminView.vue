@@ -5,6 +5,8 @@ import AdminProductsTab from '../components/admin/AdminProductsTab.vue'
 import AdminOrdersTab from '../components/admin/AdminOrdersTab.vue'
 import AdminCouponsTab from '../components/admin/AdminCouponsTab.vue'
 import AdminMigrationsTab from '../components/admin/AdminMigrationsTab.vue'
+import AdminPurchasesTab from '../components/admin/AdminPurchasesTab.vue'
+import AdminSalesTab from '../components/admin/AdminSalesTab.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -96,6 +98,28 @@ onMounted(() => {
             الكوبونات ({{ getCouponsCount() }})
           </button>
           <button
+            @click="switchTab('purchases')"
+            :class="[
+              'py-3 px-4 border-b-3 font-medium text-sm whitespace-nowrap transition-all',
+              activeTab === 'purchases'
+                ? 'border-purple-600 text-purple-700 bg-purple-50/50'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+            ]"
+          >
+            المشتريات
+          </button>
+          <button
+            @click="switchTab('sales')"
+            :class="[
+              'py-3 px-4 border-b-3 font-medium text-sm whitespace-nowrap transition-all',
+              activeTab === 'sales'
+                ? 'border-purple-600 text-purple-700 bg-purple-50/50'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+            ]"
+          >
+            المبيعات
+          </button>
+          <button
             @click="switchTab('migrations')"
             :class="[
               'py-3 px-4 border-b-3 font-medium text-sm whitespace-nowrap transition-all',
@@ -114,6 +138,8 @@ onMounted(() => {
       <AdminProductsTab v-if="activeTab === 'products'" ref="productsTab" />
       <AdminOrdersTab v-if="activeTab === 'orders'" ref="ordersTab" />
       <AdminCouponsTab v-if="activeTab === 'coupons'" ref="couponsTab" />
+      <AdminPurchasesTab v-if="activeTab === 'purchases'" />
+      <AdminSalesTab v-if="activeTab === 'sales'" />
       <AdminMigrationsTab v-if="activeTab === 'migrations'" />
     </main>
   </div>

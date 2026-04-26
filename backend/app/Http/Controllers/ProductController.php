@@ -20,12 +20,16 @@ class ProductController extends Controller
         $query = Product::orderBy('created_at', 'desc');
 
         // Category filter
-        if ($request->has('category') && strtolower($request->input('category')) !== 'all') {
-            $category = ucfirst(strtolower($request->input('category')));
-            $query->where(function ($q) use ($category) {
-                $q->whereJsonContains('category', $category)
-                  ->orWhere('category', 'LIKE', '%"' . $category . '"%');
-            });
+        // if ($request->has('category') && strtolower($request->input('category')) !== 'all') {
+        //     $category = ucfirst(strtolower($request->input('category')));
+        //     $query->where(function ($q) use ($category) {
+        //         $q->whereJsonContains('category', $category)
+        //           ->orWhere('category', 'LIKE', '%"' . $category . '"%');
+        //     });
+        // }
+        if ($request->filled('category') && strtolower($request->input('category')) !== 'all') {
+            $category = strtolower($request->input('category')); // ✅ lowercase only
+            $query->whereJsonContains('category', $category);
         }
 
         // If no page param, return all (for admin)
@@ -33,8 +37,9 @@ class ProductController extends Controller
             return response()->json($query->get());
         }
 
-        // Public: only in-stock products
-        $query->where('inStock', true);
+        if (!($request->filled('type') && strtolower($request->input('type')) === 'admin')) {
+            $query->where('inStock', true);
+        }
 
         // Paginated response
         $perPage = (int) $request->input('per_page', 8);

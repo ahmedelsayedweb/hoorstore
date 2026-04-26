@@ -8,9 +8,11 @@ export const productsApi = {
   },
 
   // Get products with pagination
-  async getPage(page = 1, perPage = 8, category = '') {
+  async getPage(page = 1, perPage = 8, category = '',type = '') {
+    console.log(category);
     const params = new URLSearchParams({ page, per_page: perPage })
     if (category && category !== 'all') params.append('category', category)
+    if (type && type !== '') params.append('type', type)
     const res = await fetch(`${API_URL}/products?${params}`)
     return res.json()
   },
